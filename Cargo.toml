@@ -1,0 +1,13 @@
+[package]
+name = "mouse_game"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = { version = "0.8", features = ["ws"] }
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+futures = "0.3"
+tower-http = { version = "0.6", features = ["fs"] }
+parking_lot = "0.12"
+uuid = { version = "1.18", features = ["v4"] }

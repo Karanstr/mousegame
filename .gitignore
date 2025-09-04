@@ -1,0 +1,8 @@
+# Rust specific stuff
+/target
+Cargo.lock
+
+# Devenv metadata used for rust environment
+devenv.lock
+.devenv*
+devenv.*
