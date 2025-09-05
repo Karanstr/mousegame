@@ -1,7 +1,6 @@
 use axum::{
   extract::ws::{WebSocketUpgrade, WebSocket, Message},
   extract::State,
-  response::IntoResponse,
   routing::any,
   Router,
 };
@@ -19,24 +18,6 @@ enum Event {
   Connect { id: Uuid, tx: UnboundedSender<Message> },
   Message { id: Uuid, msg: Message },
   Disconnect { id: Uuid },
-}
-
-
-#[tokio::main]
-async fn main() {
-  let (svr_tx, svr_rx) = unbounded_channel::<Event>();
-  tokio::spawn( async move { server(svr_rx).await; });
-
-  let app = Router::new()
-    .route("/ws", any(ws_handler))
-    .with_state(svr_tx)
-  .fallback_service(ServeDir::new("static"));
-
-  let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
-  println!("Running at http://{}", addr);
-
-  // Bind the listener and the router
-  axum::serve(TcpListener::bind(addr).await.unwrap(), app).await.unwrap();
 }
 
 async fn server(mut rx: UnboundedReceiver<Event>) {
@@ -63,10 +44,6 @@ async fn server(mut rx: UnboundedReceiver<Event>) {
     }
   }
 
-}
-
-async fn ws_handler(ws: WebSocketUpgrade, State(svr_tx): State<UnboundedSender<Event>>) -> impl IntoResponse {
-  ws.on_upgrade(move |socket| handle_socket(socket, Uuid::new_v4(), svr_tx))
 }
 
 // Per-client message thread
@@ -97,3 +74,24 @@ async fn handle_socket(socket: WebSocket, session_uuid: Uuid, svr_tx: UnboundedS
   }
   let _ = svr_tx.send(Event::Disconnect { id: session_uuid });
 }
+
+async fn ws_handler(ws: WebSocketUpgrade, State(svr_tx): State<UnboundedSender<Event>>) -> impl axum::response::IntoResponse {
+  ws.on_upgrade(move |socket| handle_socket(socket, Uuid::new_v4(), svr_tx))
+}
+
+#[tokio::main]
+async fn main() {
+  let (svr_tx, svr_rx) = unbounded_channel::<Event>();
+  tokio::spawn( async move { server(svr_rx).await; });
+
+  let app = Router::new()
+    .route("/ws", any(ws_handler))
+    .with_state(svr_tx)
+  .fallback_service(ServeDir::new("static"));
+
+  let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+  println!("Running at http://{}", addr);
+
+  axum::serve(TcpListener::bind(addr).await.unwrap(), app).await.unwrap();
+}
+
