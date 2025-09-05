@@ -18,7 +18,6 @@ function sendMessage() {
   const input = document.getElementById("msg");
   const text = input.value;
   socket.send(text);
-  logMessage("You: " + text);
   input.value = "";
 }
 

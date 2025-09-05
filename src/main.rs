@@ -6,84 +6,94 @@ use axum::{
   Router,
 };
 use uuid::Uuid;
-use parking_lot::RwLock;
 use tower_http::services::ServeDir;
 use futures::{StreamExt, SinkExt};
 use std::{
   net::SocketAddr,
-  sync::Arc,
   collections::hash_map::HashMap,
 };
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::net::TcpListener;
 
-type Clients = Arc<RwLock<HashMap<Uuid, mpsc::UnboundedSender<Message>>>>;
+enum Event {
+  Connect { id: Uuid, tx: UnboundedSender<Message> },
+  Message { id: Uuid, msg: Message },
+  Disconnect { id: Uuid },
+}
+
 
 #[tokio::main]
 async fn main() {
-  let clients: Clients = Arc::new(RwLock::new(HashMap::new()));
+  let (svr_tx, svr_rx) = unbounded_channel::<Event>();
+  tokio::spawn( async move { server(svr_rx).await; });
 
   let app = Router::new()
     .route("/ws", any(ws_handler))
-    .with_state(clients.clone())
+    .with_state(svr_tx)
   .fallback_service(ServeDir::new("static"));
 
   let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
   println!("Running at http://{}", addr);
 
   // Bind the listener and the router
-  axum::serve(
-    tokio::net::TcpListener::bind(addr).await.unwrap(),
-    app,
-  ).await.unwrap();
+  axum::serve(TcpListener::bind(addr).await.unwrap(), app).await.unwrap();
 }
 
-async fn ws_handler(ws: WebSocketUpgrade, State(clients): State<Clients>) -> impl IntoResponse {
-  ws.on_upgrade(move |socket| handle_socket(socket, clients))
+async fn server(mut rx: UnboundedReceiver<Event>) {
+  let mut clients: HashMap<Uuid, UnboundedSender<Message>> = HashMap::new();
+  while let Some(event) = rx.recv().await {
+    match event {
+      Event::Connect { id, tx } => { clients.insert(id, tx); }
+      Event::Disconnect { id } => { clients.remove(&id); }
+      Event::Message { id, msg } => {
+        match msg {
+          Message::Text(text) => {
+            let msg = text.as_str();
+            println!("Recieved: {msg} from {id}");
+            for (client, tx) in clients.iter() {
+              let name = if client == &id { "You: ".to_owned() } else { format!("{client}: ") };
+              let full_message = Message::Text((name + msg).into());
+              let _ = tx.send(full_message); // The socket thread should clean this up, so we can ignore
+            }
+          }
+          _ => {}
+        }
+
+      }
+    }
+  }
+
+}
+
+async fn ws_handler(ws: WebSocketUpgrade, State(svr_tx): State<UnboundedSender<Event>>) -> impl IntoResponse {
+  ws.on_upgrade(move |socket| handle_socket(socket, Uuid::new_v4(), svr_tx))
 }
 
 // Per-client message thread
-// Stream is the Websocket connection with the client
-// Clients is an Arc containing a mutex list of broadcast ids (?)
-async fn handle_socket(stream: WebSocket, clients: Clients) {
-  let (mut sender, mut receiver) = stream.split();
-  let (message_queue, mut mailbox) = mpsc::unbounded_channel();
-  let session_uuid = Uuid::new_v4();
-  // Register client
-  clients.write().insert(session_uuid, message_queue);
-
-  // Task: Push messages from the queue across the websocket
-  let send_task = tokio::spawn(async move {
-    // While the mailbox exists, wait for the next message.
+async fn handle_socket(socket: WebSocket, session_uuid: Uuid, svr_tx: UnboundedSender<Event>) {
+  let (client_tx, mut mailbox) = unbounded_channel::<Message>();
+  let _ = svr_tx.send(Event::Connect { id: session_uuid, tx: client_tx } );
+  let (mut sender, mut receiver) = socket.split();
+  
+  let ws_output = tokio::spawn(async move {
     while let Some(msg) = mailbox.recv().await {
-      if sender.send(msg).await.is_err() {
-        // If the sender no longer exists, terminate the thread
-        break;
-      }
+      if sender.send(msg).await.is_err() { break; }
     }
   });
 
-  // Task: Handle messages received from the websocket
-  let recv_task = {
-    // Give the thread a threadsafe list of all clients
-    let clients = clients.clone();
+  let ws_input = {
+    let svr_tx = svr_tx.clone();
     tokio::spawn(async move {
-      while let Some(Ok(Message::Text(text))) = receiver.next().await {
-        println!("Received: {}", text);
-        let msg = Message::Text(text);
-        for (id, client) in clients.read().iter() {
-          if id == &session_uuid { continue }
-          let text = Message::Text((format!("User {}: ", session_uuid) + msg.to_text().unwrap()).into());
-          let _ = client.send(text); // Error if client is closed
-        }
+      while let Some(Ok(msg)) = receiver.next().await {
+        let _ = svr_tx.send(Event::Message {id: session_uuid, msg} );
       }
     })
   };
 
   // When either thread fails, the client has disconnected
   tokio::select! {
-    _ = send_task => {},
-    _ = recv_task => {},
+    _ = ws_output => (),
+    _ = ws_input => (),
   }
-
-  clients.write().remove(&session_uuid);
+  let _ = svr_tx.send(Event::Disconnect { id: session_uuid });
 }
