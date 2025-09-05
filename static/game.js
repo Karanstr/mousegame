@@ -2,17 +2,11 @@
 const socket = new WebSocket("ws://localhost:8080/ws");
 const log = document.getElementById("log");
 
-socket.onopen = () => {
-  logMessage("Connected to server");
-};
+socket.onopen = () => { logMessage("Connected to server"); };
 
-socket.onmessage = (event) => {
-  logMessage(event.data);
-};
+socket.onclose = () => { logMessage("Disconnected"); };
 
-socket.onclose = () => {
-  logMessage("Disconnected");
-};
+socket.onmessage = (event) => { logMessage(event.data); };
 
 function sendMessage() {
   const input = document.getElementById("msg");
