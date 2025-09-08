@@ -24,7 +24,7 @@ impl Server {
     let app = Router::new().route("/ws", axum::routing::get(
       |ws: WebSocketUpgrade, State(svr_tx): State<UnboundedSender<Event>>| async move {
         ws.on_upgrade(move |socket| async move { let _ = svr_tx.send(Event::Connect(socket)); })
-    },),).with_state(tx.clone()).fallback_service(ServeDir::new("static"));
+    },),).with_state(tx.clone()).fallback_service(ServeDir::new("web"));
     
     tokio::spawn(async move {
       axum::serve(TcpListener::bind(address).await.unwrap(), app).await.unwrap();
@@ -33,12 +33,13 @@ impl Server {
     Self { mailbox, tx, list: HashMap::new() }
   }
   
-  pub fn connect_socket(&mut self, socket: WebSocket) {
+  pub fn connect_socket(&mut self, socket: WebSocket) -> uuid::Uuid {
     let id = uuid::Uuid::new_v4();
     let (client_tx, client_mailbox) = unbounded_channel::<Event>();
     let server_tx = self.tx.clone();
     tokio::spawn(async move { handle_socket(socket, id, server_tx, client_mailbox).await });
     self.list.insert(id, client_tx);
+    id
   }
 
 }
@@ -46,8 +47,6 @@ impl Server {
 async fn handle_socket(socket: WebSocket, id: uuid::Uuid, server_tx: UnboundedSender<Event>, mut mailbox: UnboundedReceiver<Event>) {
   let (mut sender, mut receiver) = socket.split();
   
-  // In the future we could update this to, say, close the websocket remotely
-  // but for now we only care about it forwarding messages
   let ws_output = tokio::spawn(async move {
     while let Some(Event::Message(_, msg)) = mailbox.recv().await {
       if sender.send(msg).await.is_err() { break; }
@@ -67,7 +66,6 @@ async fn handle_socket(socket: WebSocket, id: uuid::Uuid, server_tx: UnboundedSe
     _ = ws_output => (),
     _ = ws_input => (),
   }
-  dbg!("Socket shut down");
   server_tx.send(Event::Disconnect(id)).unwrap();
 }
 
