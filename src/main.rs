@@ -18,30 +18,28 @@ struct GameState {
 }
 impl GameState {
   
-}
+  pub fn new() -> Self {
+    Self {
+      player_list: HashMap::new(),
+      current_level: Level,
+      levels: Vec::new(),
+    }
+  }
 
-#[tokio::main]
-async fn main() {
-  let mut server = Server::new(SocketAddr::from(([127, 0, 0, 1], 8080)));
-  let mut players = HashMap::new();
-
-  loop {
+  pub fn handle_events(&mut self, server: &mut Server) {
     while let Ok(event) = server.mailbox.try_recv() {
       match event {
-        Event::Connect(socket) => {
-          let id = server.connect_socket(socket);
-          players.insert(id, IVec2::ZERO);
-        },
+        Event::Connect(socket) => { self.player_list.insert(server.connect_socket(socket), IVec2::ZERO); },
         Event::Disconnect(id) => { server.list.remove(&id); }
         Event::Message(sender, message) => {
           if let Message::Binary(data) = message {
             let a = &data.to_vec();
             let data: &[i32] = bytemuck::cast_slice(&a);
-            let player = players.get_mut(&sender).unwrap();
+            let player = self.player_list.get_mut(&sender).unwrap();
             *player = IVec2::from_slice(data);
 
             let mut positions = Vec::new();
-            for (_, player) in players.iter() {
+            for (_, player) in self.player_list.iter() {
               positions.push(player.x);
               positions.push(player.y);
             }
@@ -54,6 +52,17 @@ async fn main() {
         }
       }
     }
+  }
+  
+}
+
+#[tokio::main]
+async fn main() {
+  let mut server = Server::new(SocketAddr::from(([127, 0, 0, 1], 8080)));
+  let mut game_state = GameState::new();
+
+  loop {
+    game_state.handle_events(&mut server);
   }
 
 }
