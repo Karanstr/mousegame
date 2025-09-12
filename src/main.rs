@@ -1,5 +1,5 @@
 mod networking;
-use std::{collections::HashMap, net::SocketAddr};
+use std::{collections::HashMap, net::SocketAddr, thread::sleep, time::{Duration, Instant}};
 use axum::extract::ws::Message;
 use glam::IVec2;
 use networking::{Server, Event};
@@ -10,10 +10,41 @@ const SERVER_UUID: Uuid = Uuid::nil();
 struct Player(IVec2);
 
 struct Level;
+impl Level {
+  // The first pair of each shape is [num_points, color/texture_id], followed by each point of the polygon
+  fn geometry(&self) -> Vec<[i32; 2]> {
+    let mut geometry = Vec::new();
+    geometry.push([3, 0]);
+    geometry.push([20, 20]);
+    geometry.push([80, 30]);
+    geometry.push([40, 90]);
+    return geometry;
+  }
+}
+
+#[repr(u8)]
+enum ServerToClient {
+  PlayerUpdate,
+  LevelUpdate,
+}
+
+#[repr(u8)]
+enum ClientToServer {
+  Position,
+  Unknown = 255,
+}
+impl From<u8> for ClientToServer {
+  fn from(value: u8) -> Self {
+    match value {
+      0 => ClientToServer::Position,
+      _ => ClientToServer::Unknown,
+    }
+  }
+}
 
 struct GameState {
   player_list: HashMap<Uuid, IVec2>,
-  current_level: Level,
+  current_level: usize,
   levels: Vec<Level>,
 }
 impl GameState {
@@ -21,49 +52,86 @@ impl GameState {
   pub fn new() -> Self {
     Self {
       player_list: HashMap::new(),
-      current_level: Level,
-      levels: Vec::new(),
+      current_level: 0,
+      levels: vec![Level],
     }
+  }
+
+  fn update_player(&mut self, id: Uuid, new_pos: IVec2) {
+    *self.player_list.get_mut(&id).unwrap() = new_pos;
   }
 
   pub fn handle_events(&mut self, server: &mut Server) {
     while let Ok(event) = server.mailbox.try_recv() {
       match event {
-        Event::Connect(socket) => { self.player_list.insert(server.connect_socket(socket), IVec2::ZERO); },
+        Event::Connect(socket) => { self.player_list.insert(server.connect_socket(socket), IVec2::ZERO); }
         Event::Disconnect(id) => { server.list.remove(&id); }
-        Event::Message(sender, message) => {
+        Event::Binary(id, message) => {
           if let Message::Binary(data) = message {
-            let a = &data.to_vec();
-            let data: &[i32] = bytemuck::cast_slice(&a);
-            let player = self.player_list.get_mut(&sender).unwrap();
-            *player = IVec2::from_slice(data);
-
-            let mut positions = Vec::new();
-            for (_, player) in self.player_list.iter() {
-              positions.push(player.x);
-              positions.push(player.y);
+            let bytes = &data.to_vec();
+            let data: &[i32] = bytemuck::cast_slice(&bytes);
+            match ClientToServer::from(bytes[0]) {
+              ClientToServer::Position => {
+                self.update_player(id, IVec2::new(data[1], data[2]));
+              }
+              ClientToServer::Unknown => { println!("Unknown type recieved: {}", bytes[0]); }
             }
-            let binary: Vec<u8> = bytemuck::cast_slice(&positions).to_vec();
-
-            let _ = server.list.get(&sender).unwrap().send(
-              Event::Message(SERVER_UUID, Message::Binary(binary.into()))
-            );
           }
         }
       }
     }
   }
+
+  pub fn tick(&mut self) {
+
+  }
   
+  
+
 }
 
 #[tokio::main]
 async fn main() {
   let mut server = Server::new(SocketAddr::from(([127, 0, 0, 1], 8080)));
   let mut game_state = GameState::new();
-
+  
+  let update_interval = Duration::from_millis(50); // 20 updates per second
+  let mut last_update = Instant::now();
   loop {
+    let now = Instant::now();
+    if now.duration_since(last_update) < update_interval {
+      sleep(Duration::from_millis(1));
+      continue
+    }
+    last_update = now;
+
     game_state.handle_events(&mut server);
+    
+    game_state.tick();
+
+    update_clients(&game_state, &mut server);
   }
 
+}
+
+// Fix this to also update level if a flag is set
+fn update_clients(state: &GameState, server: &mut Server) {
+  // Start with flag
+  let mut pos_data = vec!(ServerToClient::PlayerUpdate as u8 as i32);
+  for (_, player) in state.player_list.iter() {
+    pos_data.push(player.x);
+    pos_data.push(player.y);
+  }
+  let bin_pos: Vec<u8> = bytemuck::cast_slice(&pos_data).to_vec();
+
+  // Start with flag
+  let mut geo_data = vec!(ServerToClient::LevelUpdate as u8 as i32);
+  geo_data.extend(state.levels[state.current_level].geometry().into_iter().flatten());
+  let bin_geo: Vec<u8> = bytemuck::cast_slice(&geo_data).to_vec();
+  
+  for (_, connection) in server.list.iter() {
+    let _ = connection.send(Event::Binary(SERVER_UUID, Message::Binary(bin_pos.clone().into())));
+    let _ = connection.send(Event::Binary(SERVER_UUID, Message::Binary(bin_geo.clone().into())));
+  }
 }
 

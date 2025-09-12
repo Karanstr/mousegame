@@ -5,17 +5,18 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use axum::{ extract::{ws::WebSocketUpgrade, State}, Router};
 use tower_http::services::ServeDir;
 use tokio::net::TcpListener;
+use uuid::Uuid;
 
 pub enum Event {
   Connect(WebSocket),
-  Message(uuid::Uuid, Message),
-  Disconnect(uuid::Uuid),
+  Binary(Uuid, Message),
+  Disconnect(Uuid),
 }
 
 pub struct Server {
   pub mailbox: UnboundedReceiver<Event>,
   pub tx: UnboundedSender<Event>,
-  pub list: HashMap<uuid::Uuid, UnboundedSender<Event>>
+  pub list: HashMap<Uuid, UnboundedSender<Event>>
 }
 impl Server {
   pub fn new(address: SocketAddr) -> Self {
@@ -33,8 +34,8 @@ impl Server {
     Self { mailbox, tx, list: HashMap::new() }
   }
   
-  pub fn connect_socket(&mut self, socket: WebSocket) -> uuid::Uuid {
-    let id = uuid::Uuid::new_v4();
+  pub fn connect_socket(&mut self, socket: WebSocket) -> Uuid {
+    let id = Uuid::new_v4();
     let (client_tx, client_mailbox) = unbounded_channel::<Event>();
     let server_tx = self.tx.clone();
     tokio::spawn(async move { handle_socket(socket, id, server_tx, client_mailbox).await });
@@ -44,11 +45,11 @@ impl Server {
 
 }
 
-async fn handle_socket(socket: WebSocket, id: uuid::Uuid, server_tx: UnboundedSender<Event>, mut mailbox: UnboundedReceiver<Event>) {
+async fn handle_socket(socket: WebSocket, id: Uuid, server_tx: UnboundedSender<Event>, mut mailbox: UnboundedReceiver<Event>) {
   let (mut sender, mut receiver) = socket.split();
   
   let ws_output = tokio::spawn(async move {
-    while let Some(Event::Message(_, msg)) = mailbox.recv().await {
+    while let Some(Event::Binary(_, msg)) = mailbox.recv().await {
       if sender.send(msg).await.is_err() { break; }
     }
   });
@@ -57,7 +58,7 @@ async fn handle_socket(socket: WebSocket, id: uuid::Uuid, server_tx: UnboundedSe
     let tx = server_tx.clone();
     tokio::spawn(async move {
       while let Some(Ok(msg)) = receiver.next().await {
-        tx.send(Event::Message(id, msg)).unwrap();
+        tx.send(Event::Binary(id, msg)).unwrap();
       }
     })
   };
