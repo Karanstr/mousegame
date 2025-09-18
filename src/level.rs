@@ -65,7 +65,7 @@ pub struct Level {
 // Impl Serde
 impl Level {
   
-  pub fn add_object(&mut self, object: Object) {
+  pub fn add_object(&mut self, object: Object) -> RigidBodyHandle {
     let rigid_body = RigidBodyBuilder::new(object.body_type)
       .translation(Vector2::new(object.origin.x as f32, object.origin.y as f32))
       .build();
@@ -83,6 +83,7 @@ impl Level {
       &mut self.physics.rigids
     );
     self.objects.insert(rb_handle, object);
+    rb_handle
   }
 
   pub fn new(things: Vec<Object>) -> Self { 
@@ -98,12 +99,15 @@ impl Level {
   }
 
   // The first pair of each shape is [num_points, color/texture_id], followed by each point of the polygon
+  // For now all are hardcoded as red
   pub fn geometry(&self) -> Vec<[i32; 2]> {
     let mut geometry = Vec::new();
-    geometry.push([3, 0]);
-    geometry.push([20, 20]);
-    geometry.push([80, 30]);
-    geometry.push([40, 90]);
+    for (_, object) in &self.objects {
+      geometry.push([object.points.len() as i32, 0]);
+      for point in &object.points {
+        geometry.push([point.x, point.y])
+      }
+    }
     return geometry;
   }
 

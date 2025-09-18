@@ -27,7 +27,7 @@ impl GameState {
     Self {
       player_list: HashMap::new(),
       current_level: 0,
-      levels: vec![Level::new()],
+      levels: vec![Level::new(vec![])],
     }
   }
 
