@@ -1,26 +1,14 @@
 mod networking;
+mod level;
+use level::Level;
 use std::{collections::HashMap, net::SocketAddr, thread::sleep, time::{Duration, Instant}};
 use axum::extract::ws::Message;
 use glam::IVec2;
 use networking::{Server, Event};
 use uuid::Uuid;
+use rapier2d::{na::Vector2, prelude::*};
 
 const SERVER_UUID: Uuid = Uuid::nil();
-
-struct Player(IVec2);
-
-struct Level;
-impl Level {
-  // The first pair of each shape is [num_points, color/texture_id], followed by each point of the polygon
-  fn geometry(&self) -> Vec<[i32; 2]> {
-    let mut geometry = Vec::new();
-    geometry.push([3, 0]);
-    geometry.push([20, 20]);
-    geometry.push([80, 30]);
-    geometry.push([40, 90]);
-    return geometry;
-  }
-}
 
 #[repr(u8)]
 enum ServerToClient {
@@ -28,22 +16,8 @@ enum ServerToClient {
   LevelUpdate,
 }
 
-#[repr(u8)]
-enum ClientToServer {
-  Position,
-  Unknown = 255,
-}
-impl From<u8> for ClientToServer {
-  fn from(value: u8) -> Self {
-    match value {
-      0 => ClientToServer::Position,
-      _ => ClientToServer::Unknown,
-    }
-  }
-}
-
 struct GameState {
-  player_list: HashMap<Uuid, IVec2>,
+  player_list: HashMap<Uuid, ColliderHandle>,
   current_level: usize,
   levels: Vec<Level>,
 }
@@ -53,11 +27,13 @@ impl GameState {
     Self {
       player_list: HashMap::new(),
       current_level: 0,
-      levels: vec![Level],
+      levels: vec![Level::new()],
     }
   }
 
   fn update_player(&mut self, id: Uuid, new_pos: IVec2) {
+    let cur_level = self.levels[self.current_level];
+    cur_level.
     *self.player_list.get_mut(&id).unwrap() = new_pos;
   }
 
@@ -67,26 +43,15 @@ impl GameState {
         Event::Connect(socket) => { self.player_list.insert(server.connect_socket(socket), IVec2::ZERO); }
         Event::Disconnect(id) => { server.list.remove(&id); }
         Event::Binary(id, message) => {
-          if let Message::Binary(data) = message {
-            let bytes = &data.to_vec();
-            let data: &[i32] = bytemuck::cast_slice(&bytes);
-            match ClientToServer::from(bytes[0]) {
-              ClientToServer::Position => {
-                self.update_player(id, IVec2::new(data[1], data[2]));
-              }
-              ClientToServer::Unknown => { println!("Unknown type recieved: {}", bytes[0]); }
-            }
+          if let Message::Binary(bytes) = message {
+            let real_bytes = bytes.to_vec();
+            let data: &[i32] = bytemuck::cast_slice(&real_bytes);
+            self.update_player(id, IVec2::new(data[0], data[1]));
           }
         }
       }
     }
   }
-
-  pub fn tick(&mut self) {
-
-  }
-  
-  
 
 }
 
@@ -107,8 +72,6 @@ async fn main() {
 
     game_state.handle_events(&mut server);
     
-    game_state.tick();
-
     update_clients(&game_state, &mut server);
   }
 

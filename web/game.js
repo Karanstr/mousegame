@@ -13,14 +13,9 @@ const ServerToClient = Object.freeze({
   STATE_UPDATE: 0,
   LEVEL_UPDATE: 1
 });
-const ClientToServer = Object.freeze({
-  POSITION: 0,
-});
 
 function sendMousePos(x, y) { 
-  socket.send(new Int32Array(
-    [ClientToServer.POSITION_UPDATE, x, y]
-  ));
+  socket.send(new Int32Array( [x, y] ));
 }
 
 class Player {
@@ -75,7 +70,7 @@ function update_players(data) {
   clientState.players = serverState.players.map(p => new Player(p.x, p.y));
 }
 
-
+// This should link with the enum in src/level
 const COLORS = new Map();
 COLORS.set(0, "red");
 
