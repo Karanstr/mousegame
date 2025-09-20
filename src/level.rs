@@ -15,7 +15,6 @@ pub struct Physics {
   ccd_solver: CCDSolver,
   integration_params: IntegrationParameters,
 }
-
 impl Physics {
   pub fn new() -> Self {
     Self {
@@ -54,20 +53,84 @@ pub struct Object {
   points: Vec<IVec2>,
   body_type: RigidBodyType,
   origin: IVec2,
+  color: u32,
+}
+impl Object {
+  pub fn new_player(position: IVec2) -> Self {
+    Self {
+      points: vec![
+        IVec2::new(-10, -10),
+        IVec2::new(10, -10),
+        IVec2::new(10, 10),
+        IVec2::new(-10, 10),
+      ],
+      origin: position.into(),
+      body_type: RigidBodyType::Dynamic,
+      color: 0,
+    }
+  }
+
+  pub fn new_wall(position: IVec2, points: Vec<IVec2>) -> Self {
+    Self {
+      points,
+      origin: position.into(),
+      body_type: RigidBodyType::Fixed,
+      color: 1,
+    }
+  }
+
+  // Serializer
+  // Binary Format:
+  // [key, color, point_count, position, points (x, y, x, y)]
+  // Passing the key in is stupid, but I want this to work soon and I have stuff to do
+  pub fn serialize(&self, key: RigidBodyHandle) -> Vec<i32> {
+    let mut data = Vec::new();
+    data.push(key.into_raw_parts().0 as i32);
+    data.push(self.color as i32);
+    data.push(self.points.len() as i32);
+    data.push(self.origin.x);
+    data.push(self.origin.y);
+    for point in &self.points {
+      data.push(point.x);
+      data.push(point.y);
+    }
+    data
+  }
+  
 }
 
-
 pub struct Level {
-  objects: HashMap<RigidBodyHandle, Object>,
+  pub objects: HashMap<RigidBodyHandle, Object>,
   physics: Physics,
 }
 
-// Impl Serde
 impl Level {
-  
+
+  pub fn tick(&mut self) {
+    self.physics.step();
+    // Update object list and remove velocity
+    for handle in self.objects.keys().copied().collect::<Vec<_>>() {
+      let origin = self.get_pos(handle);
+      let obj = self.objects.get_mut(&handle).unwrap();
+      obj.origin = origin;
+    }
+  }
+
+  pub fn add_vel(&mut self, handle: RigidBodyHandle, velocity: IVec2) {
+    let rb = self.physics.rigids.get_mut(handle).unwrap();
+    rb.add_force(Vector2::new(velocity.x as f32, velocity.y as f32), true);
+  }
+
+  pub fn get_pos(&self, handle: RigidBodyHandle) -> IVec2 {
+    let bad_pos = self.physics.rigids.get(handle).unwrap().position().translation;
+    IVec2::new(bad_pos.x as i32, bad_pos.y as i32)
+  }
+
   pub fn add_object(&mut self, object: Object) -> RigidBodyHandle {
     let rigid_body = RigidBodyBuilder::new(object.body_type)
       .translation(Vector2::new(object.origin.x as f32, object.origin.y as f32))
+      .locked_axes(LockedAxes::ROTATION_LOCKED)
+      .ccd_enabled(true)
       .build();
     let rb_handle = self.physics.rigids.insert(rigid_body);
 
@@ -91,24 +154,8 @@ impl Level {
       objects: HashMap::new(),
       physics: Physics::new(),
     };
-
-    for object in things {
-      new.add_object(object);
-    }
+    for object in things { new.add_object(object); }
     new
-  }
-
-  // The first pair of each shape is [num_points, color/texture_id], followed by each point of the polygon
-  // For now all are hardcoded as red
-  pub fn geometry(&self) -> Vec<[i32; 2]> {
-    let mut geometry = Vec::new();
-    for (_, object) in &self.objects {
-      geometry.push([object.points.len() as i32, 0]);
-      for point in &object.points {
-        geometry.push([point.x, point.y])
-      }
-    }
-    return geometry;
   }
 
 }
