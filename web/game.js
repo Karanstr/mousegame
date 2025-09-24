@@ -16,11 +16,6 @@ const socket = new WebSocket("ws://localhost:8080/ws");
 // socket.onopen = () => { console.log("Connected"); };
 // socket.onclose = () => { console.log("Disconnected"); };
 
-
-document.addEventListener('mousemove', function(event) {
-    console.log('X: ' + event.clientX + ', Y: ' + event.clientY);
-});
-
 canvas.addEventListener("click", async () => { await canvas.requestPointerLock({ unadjustedMovement: true }); });
 const sensitivity = document.getElementById("sensitivity");
 canvas.addEventListener("mousemove", (e) => {

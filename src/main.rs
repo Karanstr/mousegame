@@ -1,13 +1,13 @@
 mod networking;
 mod level;
 use level::Level;
-use std::{collections::HashMap, net::SocketAddr, thread::sleep, time::{Duration, Instant}};
+use std::{net::SocketAddr, thread::sleep, time::{Duration, Instant}};
+use std::collections::HashMap;
 use axum::extract::ws::Message;
 use glam::IVec2;
 use networking::{Server, Event};
 use uuid::Uuid;
-
-use crate::level::Object;
+use crate::level::{Object, RenderData};
 
 const SERVER_UUID: Uuid = Uuid::nil();
 
@@ -24,8 +24,9 @@ impl GameState {
       player_list: HashMap::new(),
       current_level: 0,
       levels: vec![Level::new(vec![
-        Object::new_rect(IVec2::new(225, 150), IVec2::new(50, 200)),
-        Object::new_rect(IVec2::new(150, 225), IVec2::new(200, 50)),
+        Object::new_rect(IVec2::new(225, 150), IVec2::new(50, 200), RenderData::Wall),
+        Object::new_rect(IVec2::new(150, 225), IVec2::new(200, 50), RenderData::Wall),
+        Object::new_rect(IVec2::new(300, 300), IVec2::new(200, 50), RenderData::WinZone),
       ])],
       full_update: true
     }
@@ -41,7 +42,7 @@ impl GameState {
 
   fn add_player(&mut self, connection_id: Uuid) {
     let cur_level = &mut self.levels[self.current_level];
-    let object_id = cur_level.add_object(Object::new_mouse(IVec2::ZERO));
+    let object_id = cur_level.add_object(Object::new_mouse(IVec2::new(100, 100)));
     self.player_list.insert(connection_id, object_id);
     self.full_update = true;
   }
@@ -98,17 +99,17 @@ fn broadcast_state(state: &GameState, server: &mut Server) {
       let object = state.levels[state.current_level].get_obj(*obj_id).unwrap();
       message_data.extend(object.serialize(*obj_id));
     }
-  }
-  // This is a little bit of a hack, ideally we'd track all non-static objects
-  // But for the moment only players can move
-  for obj_id in state.player_list.values() {
-    let pos = state.levels[state.current_level].get_pos(*obj_id);
-    message_data.push(*obj_id as i32);
-    message_data.push(pos.x);
-    message_data.push(pos.y);
+  } else {
+    for obj_id in &state.levels[state.current_level].moving {
+      let pos = state.levels[state.current_level].get_pos(*obj_id);
+      message_data.push(*obj_id as i32);
+      message_data.push(pos.x);
+      message_data.push(pos.y);
+    }
   }
   let message = Message::Binary(bytemuck::cast_slice(&message_data).to_vec().into());
   for (_, connection) in &server.list {
     let _ = connection.send(Event::Binary(SERVER_UUID, message.clone()));
   }
 }
+

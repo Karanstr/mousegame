@@ -1,6 +1,6 @@
 use rapier2d::{na::Vector2, prelude::*};
 use glam::IVec2;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use lilypads::Pond;
 
 // We need to write and expose a custom event hook I think
@@ -62,11 +62,15 @@ pub enum Owner {
 
 #[repr(u8)]
 #[derive(Clone, Copy)]
-enum RenderData {
+pub enum RenderData {
   Player,
   Wall,
-  WinPad,
-  Death
+  Death,
+  WinZone,
+  BlueButton,
+  OrangeButton,
+  PurpleButton,
+  PinkButton,
 }
 
 pub struct Object {
@@ -75,6 +79,7 @@ pub struct Object {
   body_type: Option<RigidBodyType>,
   collider: Collider,
   render: RenderData,
+  moving: bool,
 }
 impl Object {
   pub fn new_mouse(position: IVec2) -> Self {
@@ -98,20 +103,23 @@ impl Object {
       body_type: Some(RigidBodyType::Dynamic),
       collider,
       render: RenderData::Player,
+      moving: true,
     }
   }
   
-  pub fn new_rect(top_left: IVec2, length: IVec2) -> Self {
+  pub fn new_rect(top_left: IVec2, length: IVec2, data: RenderData) -> Self {
     let halves = length / 2;
     let collider = ColliderBuilder::cuboid(halves.x as f32, halves.y as f32)
       .position(Point::new(halves.x as f32, halves.y as f32).into())
       .build();
+    let body_type = if let RenderData::WinZone = data { None } else { Some(RigidBodyType::Fixed) };
     Self {
       points: vec![IVec2::ZERO, length.with_x(0), length, length.with_y(0)],
       origin: top_left,
-      body_type: Some(RigidBodyType::Fixed),
+      body_type,
       collider,
-      render: RenderData::Wall,
+      render: data,
+      moving: false,
     }
   }
 
@@ -138,6 +146,7 @@ impl Object {
 pub struct Level {
   objects: Pond<Object>,
   pub list: HashMap<usize, Owner>,
+  pub moving: HashSet<usize>,
   physics: Physics,
 }
 impl Level {
@@ -159,7 +168,6 @@ impl Level {
       rb.apply_impulse(Vector2::new(impulse.x as f32, impulse.y as f32), true);
     } else { dbg!("Failed to add velocity to collider"); }
   }
- 
 
   pub fn get_obj(&self, id: usize) -> Option<&Object> { self.objects.get(id) }
 
@@ -190,8 +198,10 @@ impl Level {
     } else {
       Owner::Collider(self.physics.colliders.insert(object.collider.clone()))
     };
+    let moving = object.moving;
     let id = self.objects.alloc(object);
-    self.list.insert(id,owner);
+    self.list.insert(id, owner);
+    if moving { self.moving.insert(id); }
     id
   }
 
@@ -199,6 +209,7 @@ impl Level {
     let mut new = Self { 
       objects: Pond::new(),
       list: HashMap::new(),
+      moving: HashSet::new(),
       physics: Physics::new(),
     };
     for object in objects { new.add_object(object); }
@@ -206,3 +217,4 @@ impl Level {
   }
 
 }
+
