@@ -6,16 +6,16 @@ use axum::extract::ws::Message;
 use glam::IVec2;
 use networking::{Server, Event};
 use uuid::Uuid;
-use rapier2d::prelude::*;
 
 use crate::level::Object;
 
 const SERVER_UUID: Uuid = Uuid::nil();
 
 struct GameState {
-  player_list: HashMap<Uuid, RigidBodyHandle>,
+  player_list: HashMap<Uuid, usize>,
   current_level: usize,
   levels: Vec<Level>,
+  full_update: bool,
 }
 impl GameState {
   
@@ -24,26 +24,26 @@ impl GameState {
       player_list: HashMap::new(),
       current_level: 0,
       levels: vec![Level::new(vec![
-        Object::new_wall(IVec2::splat(250), vec![
-          IVec2::new(-25, -100),
-          IVec2::new(-25, 100),
-          IVec2::new(25, 100),
-          IVec2::new(25, -100),
-        ])
+        Object::new_rect(IVec2::new(225, 150), IVec2::new(50, 200)),
+        Object::new_rect(IVec2::new(150, 225), IVec2::new(200, 50)),
       ])],
+      full_update: true
     }
   }
+
+  fn active_objects(&self) -> u32 { self.levels[self.current_level].list.len() as u32 }
 
   fn update_player(&mut self, id: Uuid, delta: IVec2) {
     let cur_level = &mut self.levels[self.current_level];
     let handle = self.player_list.get(&id).unwrap();
-    cur_level.add_vel(*handle, delta * 10);
+    cur_level.apply_vel(*handle, delta);
   }
 
-  fn add_player(&mut self, id: Uuid) {
+  fn add_player(&mut self, connection_id: Uuid) {
     let cur_level = &mut self.levels[self.current_level];
-    let level_id = cur_level.add_object(Object::new_player(IVec2::ZERO));
-    self.player_list.insert(id, level_id);
+    let object_id = cur_level.add_object(Object::new_mouse(IVec2::ZERO));
+    self.player_list.insert(connection_id, object_id);
+    self.full_update = true;
   }
 
   fn tick(&mut self) { self.levels[self.current_level].tick() }
@@ -52,9 +52,7 @@ impl GameState {
     while let Ok(event) = server.mailbox.try_recv() {
       match event {
         Event::Connect(socket) => {
-          let id = server.connect_socket(socket);
-          self.add_player(id);
-          let _ = server.list.get(&id).unwrap().send(Event::Binary(SERVER_UUID, level_init(&self)));
+          self.add_player(server.connect_socket(socket));
         },
         Event::Disconnect(id) => { server.list.remove(&id); }
         Event::Binary(id, message) => {
@@ -86,39 +84,31 @@ async fn main() {
     game_state.handle_events(&mut server);
     game_state.tick();
 
-    update_clients(&game_state, &mut server);
+    broadcast_state(&game_state, &mut server);
   }
 
 }
 
-
-
-#[repr(u8)]
-enum ServerToClient {
-  LevelInit = 0,
-  LevelUpdate = 1,
-}
-fn update_clients(state: &GameState, server: &mut Server) {
-  let mut pos_data = vec!(ServerToClient::LevelUpdate as i32);
-  for (_, rb_handle) in &state.player_list {
-    let pos = state.levels[state.current_level].get_pos(*rb_handle);
-    pos_data.push(rb_handle.into_raw_parts().0 as i32);
-    pos_data.push(pos.x);
-    pos_data.push(pos.y);
+fn broadcast_state(state: &GameState, server: &mut Server) {
+  let mut message_data = vec!(if state.full_update { state.active_objects() as i32 } else { 0 });
+  // If the state is dirty, an object was added, quick and easy update by refreshing all objects
+  // This isn't optimal, but I don't wanna implement per connection state tracking right now
+  if state.full_update {
+    for obj_id in state.levels[state.current_level].list.keys() {
+      let object = state.levels[state.current_level].get_obj(*obj_id).unwrap();
+      message_data.extend(object.serialize(*obj_id));
+    }
   }
-  let message = Message::Binary(bytemuck::cast_slice(&pos_data).to_vec().into());
+  // This is a little bit of a hack, ideally we'd track all non-static objects
+  // But for the moment only players can move
+  for obj_id in state.player_list.values() {
+    let pos = state.levels[state.current_level].get_pos(*obj_id);
+    message_data.push(*obj_id as i32);
+    message_data.push(pos.x);
+    message_data.push(pos.y);
+  }
+  let message = Message::Binary(bytemuck::cast_slice(&message_data).to_vec().into());
   for (_, connection) in &server.list {
     let _ = connection.send(Event::Binary(SERVER_UUID, message.clone()));
   }
 }
-
-fn level_init(state: &GameState) -> Message {
-  // Start with flag
-  let mut geo_data = vec!(ServerToClient::LevelInit as i32);
-  for (key, object) in &state.levels[state.current_level].objects {
-    geo_data.extend(object.serialize(*key))
-  }
-  // Start with flag
-  Message::Binary(bytemuck::cast_slice(&geo_data).to_vec().into())
-}
-

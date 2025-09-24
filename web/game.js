@@ -13,37 +13,42 @@ requestAnimationFrame(gameLoop);
 
 // Connect to WebSocket
 const socket = new WebSocket("ws://localhost:8080/ws");
-// socket.onopen = () => { };
-// socket.onclose = () => { };
+// socket.onopen = () => { console.log("Connected"); };
+// socket.onclose = () => { console.log("Disconnected"); };
 
-canvas.addEventListener("click", async () => { await canvas.requestPointerLock(); });
+
+document.addEventListener('mousemove', function(event) {
+    console.log('X: ' + event.clientX + ', Y: ' + event.clientY);
+});
+
+canvas.addEventListener("click", async () => { await canvas.requestPointerLock({ unadjustedMovement: true }); });
+const sensitivity = document.getElementById("sensitivity");
 canvas.addEventListener("mousemove", (e) => {
-  socket.send(new Int32Array( [e.movementX, e.movementY] ))
+  // Only send mouse movement when locked
+  if (document.pointerLockElement === canvas) {
+    socket.send(new Int32Array( [
+      e.movementX * sensitivity.value,
+      e.movementY * sensitivity.value
+    ] ));
+  }
 });
 
-const ServerToClient = Object.freeze({
-  LEVEL_INIT: 0,
-  LEVEL_UPDATE: 1
-});
 socket.onmessage = (msg) => {
-  msg.data.bytes().then(bytes => {
-    const data = new Int32Array(bytes.buffer);
-    let flagless_data = data.subarray(1)
-    switch (data[0]) {
-      case ServerToClient.LEVEL_INIT: {
-        level = new Level(flagless_data);
-        break;
-      }
-      case ServerToClient.LEVEL_UPDATE: {
-        level.update(flagless_data);
-        break;
-      }
-      default: { console.log("Unknown Flag: " + data[0]); }
+  msg.data.arrayBuffer().then(bytes => {
+    const data = new Int32Array(bytes);
+    let new_obj_count = data[0];
+    let cur_obj_start = 1; // 0 is the flag
+    const point_count_offset = 4; // 4 from the first index of the object
+    for (let obj = 0; obj < new_obj_count; obj += 1) {
+      let point_count = data[cur_obj_start + point_count_offset];
+      let data_length = 1 + point_count_offset + 2 * point_count;
+      level.load_obj(data.subarray(cur_obj_start, cur_obj_start + data_length));
+      cur_obj_start += data_length;
     }
+    // Push all updated positions
+    level.update_pos(data.subarray(cur_obj_start, data.length));
   })
 };
-
-
 
 // Add a camera scaling to go from real game size to display size
 function render() {
@@ -52,5 +57,4 @@ function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   level.render(ctx);
 }
-
 

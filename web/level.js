@@ -1,45 +1,42 @@
 import Vec2 from "./math.js";
-
-// This should link with the enum in src/level
-const COLORS = new Map();
-COLORS.set(0, "red");
-COLORS.set(1, "blue");
+const sensitivity = document.getElementById("sensitivity");
 
 export default class Level {
+  constructor() { this.entities = new Map(); }
+
   // Deserializer
   // Binary Format:
-  // [key, color, point_count, position, points (x, y, x, y)]
-  constructor(data) {
-    this.entities = new Map();
-    let cur_idx = 0;
-    let point_count = 0;
-    let cur_key;
-    let cur_entity = new Entity();
-    while (cur_idx < data.length) {
-      // Load next shape
-      if (point_count == 0) { 
-        cur_key = data[cur_idx];
-        cur_idx += 1;
-        cur_entity.color = COLORS.get(data[cur_idx]);
-        cur_idx += 1;
-        point_count = data[cur_idx];
-        cur_idx += 1;
-        cur_entity.pos = new Vec2(data[cur_idx], data[cur_idx + 1]);
-        cur_idx += 2;
-      }
-      cur_entity.points.push(new Vec2(data[cur_idx], data[cur_idx + 1]));
-      cur_idx += 2; point_count -= 1;
-      if (point_count == 0) {
-        this.entities.set(cur_key, cur_entity);
-        cur_entity = new Entity();
-      }
+  // [key, color, position, point_count, points (x, y, x, y)]
+  // You should pass in a slice of data which contains an object
+  load_obj(data) {
+    let entity = new Entity();
+    let key = data[0];
+    switch (data[1]) {
+      case 0:
+        entity.color = "white";
+        entity.outline = true;
+        break;
+      case 1:
+        entity.color = "blue";
+        break;
     }
+    entity.pos = new Vec2(data[2], data[3]);
+    let point_count = data[4];
+    const first_point_idx = 5;
+    for (let point = 0; point < point_count; point += 1) {
+      entity.points.push(new Vec2(
+        data[first_point_idx + point * 2],
+        data[first_point_idx + point * 2 + 1],
+      ));
+    }
+    this.entities.set(key, entity);
   }
-  
+
   // Deserializer
   // Binary Format:
   // [key, pos(x, y)]
-  update(data) {
+  // You should pass in a slice of data which contains all key location pairs that need updating
+  update_pos(data) {
     for (let i = 0; i < data.length; i += 3) {
       let entity = this.entities.get(data[i]);
       entity.pos = new Vec2(data[i + 1], data[i + 2]);
@@ -50,10 +47,11 @@ export default class Level {
 }
 
 class Entity {
-  constructor(pos = new Vec2(), color = "Black", points = []) {
+  constructor(pos = new Vec2(), color = "Black") {
     this.pos = pos;
-    this.color = color
-    this.points = points; // Points = [Vec2]
+    this.color = color;
+    this.outline = false;
+    this.points = []; // Points = [Vec2]
   }
   
   render(ctx) {
@@ -66,6 +64,10 @@ class Entity {
     }
     ctx.closePath();
     ctx.fill();
+    if (this.outline) {
+      ctx.strokeStyle = "black";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
   }
-
 }
