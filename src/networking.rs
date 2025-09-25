@@ -24,8 +24,10 @@ impl Server {
     
     let app = Router::new().route("/ws", axum::routing::get(
       |ws: WebSocketUpgrade, State(svr_tx): State<UnboundedSender<Event>>| async move {
-        ws.on_upgrade(move |socket| async move { let _ = svr_tx.send(Event::Connect(socket)); })
-    },),).with_state(tx.clone()).fallback_service(ServeDir::new("web"));
+        ws.on_upgrade(move |socket| async move { 
+          let _ = svr_tx.send(Event::Connect(socket));
+        })
+    })).with_state(tx.clone()).fallback_service(ServeDir::new("web"));
     
     tokio::spawn(async move {
       axum::serve(TcpListener::bind(address).await.unwrap(), app).await.unwrap();

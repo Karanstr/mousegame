@@ -3,7 +3,6 @@ import Level from './level.js';
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
-
 let level = new Level(new Int32Array());
 function gameLoop(_timestamp) {
   render();
@@ -12,9 +11,10 @@ function gameLoop(_timestamp) {
 requestAnimationFrame(gameLoop);
 
 // Connect to WebSocket
+let connected = false;
 const socket = new WebSocket("ws://localhost:8080/ws");
-// socket.onopen = () => { console.log("Connected"); };
-// socket.onclose = () => { console.log("Disconnected"); };
+socket.onopen = () => { connected = true; };
+socket.onclose = () => { connected = false; };
 
 canvas.addEventListener("click", async () => { await canvas.requestPointerLock({ unadjustedMovement: true }); });
 const sensitivity = document.getElementById("sensitivity");
@@ -50,6 +50,6 @@ function render() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  level.render(ctx);
+  if (connected) { level.render(ctx); }
 }
 

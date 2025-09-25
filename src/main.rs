@@ -1,13 +1,14 @@
 mod networking;
-mod level;
-use level::Level;
+mod game;
+use game::Level;
 use std::{net::SocketAddr, thread::sleep, time::{Duration, Instant}};
 use std::collections::HashMap;
 use axum::extract::ws::Message;
 use glam::IVec2;
 use networking::{Server, Event};
 use uuid::Uuid;
-use crate::level::{Object, RenderData};
+use crate::game::{Object, RenderData};
+use crate::game::Physics;
 
 const SERVER_UUID: Uuid = Uuid::nil();
 
@@ -15,11 +16,13 @@ struct GameState {
   player_list: HashMap<Uuid, usize>,
   current_level: usize,
   levels: Vec<Level>,
+  physics: Physics,
   full_update: bool,
 }
 impl GameState {
   
   pub fn new() -> Self {
+    let mut physics = Physics::new();
     Self {
       player_list: HashMap::new(),
       current_level: 0,
@@ -27,7 +30,8 @@ impl GameState {
         Object::new_rect(IVec2::new(225, 150), IVec2::new(50, 200), RenderData::Wall),
         Object::new_rect(IVec2::new(150, 225), IVec2::new(200, 50), RenderData::Wall),
         Object::new_rect(IVec2::new(300, 300), IVec2::new(200, 50), RenderData::WinZone),
-      ])],
+      ], &mut physics)],
+      physics,
       full_update: true
     }
   }
@@ -37,17 +41,23 @@ impl GameState {
   fn update_player(&mut self, id: Uuid, delta: IVec2) {
     let cur_level = &mut self.levels[self.current_level];
     let handle = self.player_list.get(&id).unwrap();
-    cur_level.apply_vel(*handle, delta);
+    cur_level.apply_vel(self.physics.body_sets().0, *handle, delta);
   }
 
   fn add_player(&mut self, connection_id: Uuid) {
     let cur_level = &mut self.levels[self.current_level];
-    let object_id = cur_level.add_object(Object::new_mouse(IVec2::new(100, 100)));
+    let object_id = cur_level.add_object(
+      Object::new_mouse(IVec2::new(100, 100)),
+      &mut self.physics
+     );
     self.player_list.insert(connection_id, object_id);
     self.full_update = true;
   }
 
-  fn tick(&mut self) { self.levels[self.current_level].tick() }
+  fn tick(&mut self) { 
+    self.physics.step(&mut self.levels[self.current_level]);
+    self.levels[self.current_level].tick(&mut self.physics);
+  }
 
   pub fn handle_events(&mut self, server: &mut Server) {
     while let Ok(event) = server.mailbox.try_recv() {
@@ -100,7 +110,7 @@ fn broadcast_state(state: &GameState, server: &mut Server) {
       message_data.extend(object.serialize(*obj_id));
     }
   } else {
-    for obj_id in &state.levels[state.current_level].moving {
+    for obj_id in &state.levels[state.current_level].movable {
       let pos = state.levels[state.current_level].get_pos(*obj_id);
       message_data.push(*obj_id as i32);
       message_data.push(pos.x);
