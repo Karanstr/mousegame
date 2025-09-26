@@ -16,7 +16,7 @@
 		{ 
 			"position": [300,300],
 			"length": [250, 50],
-			"material": "WinZone",
+			"material": "WinOff",
 			"animation" :null
 		}
 	]

@@ -101,9 +101,8 @@ pub enum Material {
   Player,
   Wall,
   Death,
-  WinZone,
-  // WinZoneOff,
-  // WinZoneOn,
+  WinOn,
+  WinOff,
   // BlueButton,
   // OrangeButton,
   // PurpleButton,
@@ -115,7 +114,8 @@ impl Material {
       Material::Player => true,
       Material::Wall => false,
       Material::Death => false,
-      Material::WinZone => false,
+      Material::WinOn => false,
+      Material::WinOff => false,
     }
   }
   pub fn is_sensor(&self) -> bool {
@@ -123,7 +123,8 @@ impl Material {
       Material::Player => false,
       Material::Wall => false,
       Material::Death => false,
-      Material::WinZone => true,
+      Material::WinOn => true,
+      Material::WinOff => true,
     }
   }
   pub fn has_event(&self) -> bool {
@@ -131,7 +132,8 @@ impl Material {
       Material::Player => false,
       Material::Wall => false,
       Material::Death => true,
-      Material::WinZone => true,
+      Material::WinOn => true,
+      Material::WinOff => true,
     }
   }
 }

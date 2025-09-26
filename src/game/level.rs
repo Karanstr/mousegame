@@ -3,6 +3,8 @@ use glam::IVec2;
 use std::{collections::{HashMap, HashSet}};
 use lilypads::Pond;
 use parking_lot::Mutex;
+use crate::game::Material;
+
 use super::{Object, Physics, serde::InitialLevel};
 use super::state::ObjectUpdate;
 
@@ -15,22 +17,37 @@ pub struct Level {
   events: Mutex<Vec<CollisionEvent>>,
 }
 impl Level {
+
   pub fn tick(&mut self, physics: &mut Physics, state_changes: &mut HashMap<usize, ObjectUpdate>) {
-    let (rigids, _) = physics.body_sets();
+    let (rigids, colliders) = physics.body_sets();
     let events = self.events.get_mut();
     for event in events.into_iter() {
-      match event {
-        CollisionEvent::Started(handle1, handle2, _) => {
-
+      let (started, handle_1, handle_2) = match event {
+        CollisionEvent::Started(handle_1, handle_2, _) => {
+          (true, handle_1, handle_2)
         }
         CollisionEvent::Stopped(handle1, handle2, _) => {
-
+          (false, handle1, handle2)
         }
-      }
+      };
+      let rbh_1 = colliders.get(*handle_1).unwrap().parent().unwrap();
+      let rbh_2 = colliders.get(*handle_2).unwrap().parent().unwrap();
+      let id_1 = rigids.get(rbh_1).unwrap().user_data as usize;
+      let id_2 = rigids.get(rbh_2).unwrap().user_data as usize;
+      let (player_id, button_id) = if matches!(self.objects.get(id_1).unwrap().material, Material::Player) { 
+        (id_1, id_2)
+      } else { (id_2, id_1) };
+      let button = self.objects.get_mut(button_id).unwrap();
+      if started { button.material = Material::WinOn } else { button.material = Material::WinOff }
+      let cur_state = state_changes.remove(&button_id)
+        .unwrap_or_else(|| ObjectUpdate::new())
+        .material(button.material);
+      state_changes.insert(button_id, cur_state);
     }
     events.clear();
     self.register_movement(rigids, state_changes);
   }
+
 
   pub fn register_movement(&mut self, rigids: &mut RigidBodySet, state_changes: &mut HashMap<usize, ObjectUpdate>) {
     for id in &self.movable {
@@ -116,3 +133,4 @@ impl EventHandler for Level {
   
   fn handle_contact_force_event( &self, _: f32, _: &RigidBodySet, _: &ColliderSet, _: &ContactPair, _: f32,) { }
 }
+

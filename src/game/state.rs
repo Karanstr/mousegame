@@ -111,6 +111,7 @@ impl GameState {
     self.state_changes.insert(object_id, update);
   }
 
+  // Move all state handling out here?
   pub fn tick(&mut self) { 
     self.physics.step(&mut self.level);
     self.level.tick(&mut self.physics, &mut self.state_changes);
