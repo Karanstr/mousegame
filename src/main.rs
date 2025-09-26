@@ -4,12 +4,12 @@ use std::{net::SocketAddr, thread::sleep, time::{Duration, Instant}};
 use axum::extract::ws::Message;
 use networking::{Server, Event};
 use uuid::Uuid;
-use crate::game::GameState;
+use crate::game::{GameState, ObjectUpdate};
 const SERVER_UUID: Uuid = Uuid::nil();
 
 #[tokio::main]
 async fn main() {
-  let mut server = Server::new(SocketAddr::from(([127, 0, 0, 1], 8080)));
+  let mut server = Server::new(SocketAddr::from(([0, 0, 0, 0], 8080)));
   let mut game_state = GameState::new();
   
   let update_interval = Duration::from_millis(20); // 20 updates per second
@@ -23,26 +23,36 @@ async fn main() {
     game_state.handle_events(&mut server);
     game_state.tick();
 
-    broadcast_state(&game_state, &mut server);
+    broadcast_state(&mut game_state, &mut server);
   }
 
 }
 
-fn broadcast_state(state: &GameState, server: &mut Server) {
-  let mut message_data = vec!(if state.full_update { state.active_objects() as i32 } else { 0 });
-  // If the state is dirty an object was added or removed, quick and easy update by refreshing all objects
-  // This isn't optimal, but I don't wanna implement per connection state tracking right now
-  if state.full_update {
-    for obj_id in state.level.list.keys() {
-      let object = state.level.get_obj(*obj_id).unwrap();
-      message_data.extend(object.to_binary(*obj_id));
+// Update consists of [i32_count, id, data]
+fn broadcast_state(state: &mut GameState, server: &mut Server) {
+  let mut message_data = Vec::new();
+   if state.send_full {
+    message_data.push(state.level.list.len() as i32);
+    for id in state.level.list.keys() {
+      let obj = state.level.get_obj(*id).unwrap();
+      let mut update_data = &mut ObjectUpdate::new()
+        .position(obj.position)
+        .shape(obj.points.clone())
+        .material(obj.material)
+        .to_binary();
+      message_data.push(update_data.len() as i32 + 1);
+      message_data.push(*id as i32);
+      message_data.append(&mut update_data);
     }
+    state.send_full = false;
   } else {
-    for obj_id in &state.level.movable {
-      let pos = state.level.get_pos(*obj_id);
-      message_data.push(*obj_id as i32);
-      message_data.push(pos.x);
-      message_data.push(pos.y);
+    if state.state_changes.len() == 0 { return }
+    message_data.push(state.state_changes.len() as i32);
+    for (id, update) in state.state_changes.drain() {
+      let mut update_data = update.to_binary();
+      message_data.push(update_data.len() as i32 + 1);
+      message_data.push(id as i32);
+      message_data.append(&mut update_data);
     }
   }
   let message = Message::Binary(bytemuck::cast_slice(&message_data).to_vec().into());

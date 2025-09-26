@@ -10,6 +10,8 @@ function gameLoop(_timestamp) {
 }
 requestAnimationFrame(gameLoop);
 
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+
 // Connect to WebSocket
 let connected = false;
 const socket = new WebSocket("ws://localhost:8080/ws");
@@ -31,17 +33,14 @@ canvas.addEventListener("mousemove", (e) => {
 socket.onmessage = (msg) => {
   msg.data.arrayBuffer().then(bytes => {
     const data = new Int32Array(bytes);
-    let new_obj_count = data[0];
-    let cur_obj_start = 1; // 0 is the flag
-    const point_count_offset = 4; // 4 from the first index of the object
-    for (let obj = 0; obj < new_obj_count; obj += 1) {
-      let point_count = data[cur_obj_start + point_count_offset];
-      let data_length = 1 + point_count_offset + 2 * point_count;
-      level.load_obj(data.subarray(cur_obj_start, cur_obj_start + data_length));
-      cur_obj_start += data_length;
+    let update_count = data[0];
+    let cur_idx = 1;
+    for (let update = 0; update < update_count; update += 1) {
+      let size = data[cur_idx];
+      cur_idx += 1;
+      level.handle_update(data.subarray(cur_idx, cur_idx + size));
+      cur_idx += size;
     }
-    // Push all updated positions
-    level.update_pos(data.subarray(cur_obj_start, data.length));
   })
 };
 

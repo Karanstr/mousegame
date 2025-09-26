@@ -4,64 +4,40 @@ const sensitivity = document.getElementById("sensitivity");
 export default class Level {
   constructor() { this.entities = new Map(); }
 
-  // Deserializer
-  // Binary Format:
-  // [key, color, position, point_count, points (x, y, x, y)]
-  // You should pass in a slice of data which contains an object
-  // Player,
-  // Wall,
-  // Death,
-  // WinZone,
-  load_obj(data) {
-    let entity = new Entity();
+
+  handle_update(data) {
     let key = data[0];
-    switch (data[1]) {
-      case 0: // Player
-        entity.color = "white";
-        entity.outline = true;
-        entity.priority = 3;
-        break;
-      case 1: // Wall
-        entity.color = "black";
-        entity.priority = 1;
-        break;
-      case 2: // Death
-        entity.color = "red";
-        entity.priority = 2;
-        break;
-      case 3: // WinZone
-        entity.color = "green";
-        entity.priority = 1;
-        break;
+    let flags = data[1];
+    let idx = 2;
+    if (flags == 0) { this.entities.delete(key); return; }
+    let entity = this.entities.get(key) ?? new Entity();
+    if ((flags & 0b1) != 0) {
+      entity.pos = new Vec2(data[idx], data[idx + 1]);
+      idx += 2;
     }
-    entity.pos = new Vec2(data[2], data[3]);
-    let point_count = data[4];
-    const first_point_idx = 5;
-    for (let point = 0; point < point_count; point += 1) {
-      entity.points.push(new Vec2(
-        data[first_point_idx + point * 2],
-        data[first_point_idx + point * 2 + 1],
-      ));
+    if ((flags & 0b10) != 0) {
+      entity.points = [];
+      let point_count = data[idx];
+      idx += 1;
+      for (let point = 0; point < point_count; point += 1) {
+        entity.points.push(new Vec2(data[idx], data[idx + 1]));
+        idx += 2;
+      }
+    }
+    if ((flags & 0b100) != 0) {
+      entity.update_material(data[idx]);
+      idx += 1;
     }
     this.entities.set(key, entity);
   }
 
-  // Deserializer
-  // Binary Format:
-  // [key, pos(x, y)]
-  // You should pass in a slice of data which contains all key location pairs that need updating
-  update_pos(data) {
-    for (let i = 0; i < data.length; i += 3) {
-      let entity = this.entities.get(data[i]);
-      entity.pos = new Vec2(data[i + 1], data[i + 2]);
-    }
-  }
-  
+
+
+
   render(ctx) { 
     [...this.entities.entries()]
       .sort((a, b) => a[1].priority - b[1].priority)
       .forEach(entity => {entity[1].render(ctx)} );
-    // this.entities.forEach(entity => entity.render(ctx));
   }
 }
 
@@ -72,6 +48,28 @@ class Entity {
     this.color = color;
     this.outline = false;
     this.points = []; // Points = [Vec2]
+  }
+
+  update_material(material) {
+    switch (material) {
+      case 0: // Player
+        this.color = "white";
+        this.outline = true;
+        this.priority = 3;
+        break;
+      case 1: // Wall
+        this.color = "black";
+        this.priority = 1;
+        break;
+      case 2: // Death
+        this.color = "red";
+        this.priority = 2;
+        break;
+      case 3: // WinZone
+        this.color = "green";
+        this.priority = 1;
+        break;
+    }
   }
   
   render(ctx) {

@@ -11,7 +11,8 @@ pub struct InitialLevel {
   pub objects: Vec<MinimalRect>
 }
 impl InitialLevel {
-  pub fn new(level: &Level) -> Self {
+  // Exists as a reminder and futureproofing
+  pub fn _new(level: &Level) -> Self {
     let mut objects= Vec::new();
     for (id, _) in &level.list {
       let full_obj = level.get_obj(*id).unwrap();

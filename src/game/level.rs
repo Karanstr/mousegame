@@ -4,6 +4,7 @@ use std::{collections::{HashMap, HashSet}};
 use lilypads::Pond;
 use parking_lot::Mutex;
 use super::{Object, Physics, serde::InitialLevel};
+use super::state::ObjectUpdate;
 
 
 // Objects must be assigned visibility *or* we send each client a camera position
@@ -14,19 +15,39 @@ pub struct Level {
   events: Mutex<Vec<CollisionEvent>>,
 }
 impl Level {
-  pub fn tick(&mut self, physics: &mut Physics) {
+  pub fn tick(&mut self, physics: &mut Physics, state_changes: &mut HashMap<usize, ObjectUpdate>) {
     let (rigids, _) = physics.body_sets();
-    // Update object list
-    for id in &self.movable {
-      self.objects.get_mut(*id).unwrap().position = self.get_rapier_pos(*id, rigids);
-    }
     let events = self.events.get_mut();
     for event in events.into_iter() {
-      dbg!(event);
+      match event {
+        CollisionEvent::Started(handle1, handle2, _) => {
+
+        }
+        CollisionEvent::Stopped(handle1, handle2, _) => {
+
+        }
+      }
     }
     events.clear();
+    self.register_movement(rigids, state_changes);
   }
 
+  pub fn register_movement(&mut self, rigids: &mut RigidBodySet, state_changes: &mut HashMap<usize, ObjectUpdate>) {
+    for id in &self.movable {
+      let new_pos = self.get_rapier_pos(*id, rigids);
+      let old_pos = &mut self.objects.get_mut(*id).unwrap().position;
+      if *old_pos != new_pos {
+        let cur_state = state_changes.remove(id)
+          .unwrap_or_else(|| ObjectUpdate::new())
+          .position(new_pos);
+        state_changes.insert(*id, cur_state);
+        *old_pos = new_pos;
+      }
+    }
+  }
+
+}
+impl Level {
   pub fn apply_vel(&mut self, rigids: &mut RigidBodySet, id: usize, velocity: IVec2) {
     if self.movable.contains(&id) {
       let handle = self.list.get(&id).unwrap();

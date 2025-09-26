@@ -102,6 +102,8 @@ pub enum Material {
   Wall,
   Death,
   WinZone,
+  // WinZoneOff,
+  // WinZoneOn,
   // BlueButton,
   // OrangeButton,
   // PurpleButton,
