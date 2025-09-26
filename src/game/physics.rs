@@ -22,7 +22,7 @@ impl Physics {
     integration_params.max_ccd_substeps = 10;
     Self {
       colliders: ColliderSet::new(),
-      rigids: RigidBodySet::default(),
+      rigids: RigidBodySet::new(),
       pipeline: PhysicsPipeline::new(),
       islands: IslandManager::new(),
       broad_phase: BroadPhaseBvh::new(),
@@ -36,6 +36,11 @@ impl Physics {
 
   pub fn body_sets(&mut self) -> (&mut RigidBodySet, &mut ColliderSet) {
     (&mut self.rigids, &mut self.colliders)
+  }
+
+  pub fn reset_bodies(&mut self) {
+    self.rigids = RigidBodySet::new();
+    self.colliders = ColliderSet::new();
   }
 
   pub fn step(&mut self, level: &mut Level) {

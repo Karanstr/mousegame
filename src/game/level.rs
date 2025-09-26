@@ -1,11 +1,12 @@
 use rapier2d::{na::Vector2, prelude::*};
 use glam::IVec2;
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}};
 use lilypads::Pond;
 use parking_lot::Mutex;
-use super::Object;
-use super::Physics;
+use super::{Object, Physics, serde::InitialLevel};
 
+
+// Objects must be assigned visibility *or* we send each client a camera position
 pub struct Level {
   objects: Pond<Object>,
   pub list: HashMap<usize, RigidBodyHandle>,
@@ -17,7 +18,7 @@ impl Level {
     let (rigids, _) = physics.body_sets();
     // Update object list
     for id in &self.movable {
-      self.objects.get_mut(*id).unwrap().origin = self.get_rapier_pos(*id, rigids);
+      self.objects.get_mut(*id).unwrap().position = self.get_rapier_pos(*id, rigids);
     }
     let events = self.events.get_mut();
     for event in events.into_iter() {
@@ -38,7 +39,7 @@ impl Level {
 
   pub fn get_obj(&self, id: usize) -> Option<&Object> { self.objects.get(id) }
 
-  pub fn get_pos(&self, id: usize) -> IVec2 { self.objects.get(id).unwrap().origin }
+  pub fn get_pos(&self, id: usize) -> IVec2 { self.objects.get(id).unwrap().position }
 
   fn get_rapier_pos(&self, id: usize, rigids: &mut RigidBodySet) -> IVec2 {
     let handle = self.list.get(&id).unwrap();
@@ -58,18 +59,25 @@ impl Level {
       rigids
     );
     self.list.insert(id, rb_handle);
-    if object.movable { self.movable.insert(id); }
+    if object.material.can_move() { self.movable.insert(id); }
     id
   }
 
-  pub fn new(objects: Vec<Object>, physics: &mut Physics) -> Self { 
+  pub fn new(level: String, physics: &mut Physics) -> Self {
+    physics.reset_bodies();
     let mut new = Self { 
       objects: Pond::new(),
       list: HashMap::new(),
       movable: HashSet::new(),
       events: Mutex::new(Vec::new()),
     };
-    for object in objects { new.add_object(object, physics); }
+    let json = std::fs::read_to_string(
+      format!("{}/levels/{}", env!("CARGO_MANIFEST_DIR"), level)
+    ).unwrap();
+    let deser_level: InitialLevel = serde_json::from_str(&json).unwrap();
+    for min_obj in deser_level.objects {
+      new.add_object(min_obj.full_rect(), physics);
+    }
     new
   }
 
@@ -79,10 +87,10 @@ impl EventHandler for Level {
   
   fn handle_collision_event(
     &self,
-    bodies: &RigidBodySet,
-    colliders: &ColliderSet,
+    _: &RigidBodySet,
+    _: &ColliderSet,
     event: CollisionEvent,
-    contact_pair: Option<&ContactPair>,
+    _: Option<&ContactPair>,
   ) { self.events.lock().push(event); }
   
   fn handle_contact_force_event( &self, _: f32, _: &RigidBodySet, _: &ColliderSet, _: &ContactPair, _: f32,) { }

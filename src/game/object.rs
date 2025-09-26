@@ -1,14 +1,23 @@
 use glam::IVec2;
 use rapier2d::prelude::*;
 use rapier2d::na::Vector2;
+use serde::{Deserialize, Serialize};
+
+// This could be adapted to work with bezier curves + rotations, etc
+#[derive(Serialize, Deserialize, Clone, Copy)]
+pub struct Step {
+  vector: IVec2, 
+  ticks_duration: u32,
+  ticks_pause: i32,
+}
 
 pub struct Object {
-  pub origin: IVec2,
-  points: Vec<IVec2>,
+  pub position: IVec2,
+  pub points: Vec<IVec2>,
   pub collider: Collider,
   pub rigidbody: RigidBody,
-  render: RenderData,
-  pub movable: bool,
+  pub material: Material,
+  pub animation: Option<Vec<Step>>,
 }
 impl Object {
   pub fn new_mouse(position: IVec2) -> Self {
@@ -34,31 +43,34 @@ impl Object {
       .build();
     Self {
       points,
-      origin: position.into(),
+      position: position.into(),
       collider,
       rigidbody,
-      render: RenderData::Player,
-      movable: true,
+      material: Material::Player,
+      animation: None,
     }
   }
   
-  pub fn new_rect(top_left: IVec2, length: IVec2, data: RenderData) -> Self {
+  pub fn new_rect(top_left: IVec2, length: IVec2, material: Material, animation: Option<Vec<Step>>) -> Self {
     let halves = length / 2;
     let mut collider = ColliderBuilder::cuboid(halves.x as f32, halves.y as f32)
       .position(Point::new(halves.x as f32, halves.y as f32).into());
-    if let RenderData::WinZone = data {
-      collider = collider.sensor(true).active_events(ActiveEvents::COLLISION_EVENTS);
+    if material.is_sensor() {
+      collider = collider.sensor(true);
+    }
+    if material.has_event() {
+      collider = collider.active_events(ActiveEvents::COLLISION_EVENTS);
     }
     let rigidbody = RigidBodyBuilder::new(RigidBodyType::Fixed)
       .translation(Vector2::new(top_left.x as f32, top_left.y as f32))
       .build();
     Self {
       points: vec![IVec2::ZERO, length.with_x(0), length, length.with_y(0)],
-      origin: top_left,
+      position: top_left,
       collider: collider.build(),
       rigidbody,
-      render: data,
-      movable: false,
+      material,
+      animation
     }
   }
 
@@ -66,12 +78,12 @@ impl Object {
   // Binary Format:
   // [key, color, position, point_count, points (x, y, x, y)]
   // Passing the key in is stupid, but I want this to work soon and I have stuff to do
-  pub fn serialize(&self, key: usize) -> Vec<i32> {
+  pub fn to_binary(&self, key: usize) -> Vec<i32> {
     let mut data = Vec::new();
     data.push(key as i32);
-    data.push(self.render as i32);
-    data.push(self.origin.x);
-    data.push(self.origin.y);
+    data.push(self.material as i32);
+    data.push(self.position.x);
+    data.push(self.position.y);
     data.push(self.points.len() as i32);
     for point in &self.points {
       data.push(point.x);
@@ -84,14 +96,40 @@ impl Object {
 
 
 #[repr(u8)]
-#[derive(Clone, Copy)]
-pub enum RenderData {
+#[derive(Clone, Copy, Serialize, Deserialize)]
+pub enum Material {
   Player,
   Wall,
   Death,
   WinZone,
-  BlueButton,
-  OrangeButton,
-  PurpleButton,
-  PinkButton,
+  // BlueButton,
+  // OrangeButton,
+  // PurpleButton,
+  // PinkButton,
+}
+impl Material {
+  pub fn can_move(&self) -> bool {
+    match self {
+      Material::Player => true,
+      Material::Wall => false,
+      Material::Death => false,
+      Material::WinZone => false,
+    }
+  }
+  pub fn is_sensor(&self) -> bool {
+    match self {
+      Material::Player => false,
+      Material::Wall => false,
+      Material::Death => false,
+      Material::WinZone => true,
+    }
+  }
+  pub fn has_event(&self) -> bool {
+    match self {
+      Material::Player => false,
+      Material::Wall => false,
+      Material::Death => true,
+      Material::WinZone => true,
+    }
+  }
 }

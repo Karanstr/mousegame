@@ -1,0 +1,23 @@
+{
+  "spawnpoints": [],
+	"objects": [
+		{ 
+			"position": [150,225],
+			"length": [200,50],
+			"material": "Wall",
+			"animation" :null
+		},
+		{ 
+			"position": [225,150],
+			"length": [50,200],
+			"material": "Wall",
+			"animation" :null
+		},
+		{ 
+			"position": [300,300],
+			"length": [250, 50],
+			"material": "WinZone",
+			"animation" :null
+		}
+	]
+}
