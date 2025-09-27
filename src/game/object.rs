@@ -47,7 +47,7 @@ pub struct Object {
 
 }
 impl Object {
-  pub fn new_mouse(position: IVec2, player: u32) -> Self {
+  pub fn new_mouse(position: IVec2) -> Self {
     let points = vec![
       IVec2::new(0, 0),
       IVec2::new(0, 16),
@@ -73,7 +73,7 @@ impl Object {
       position: position.into(),
       collider,
       rigidbody,
-      material: Material::Player(player),
+      material: Material::Player,
       animation: None,
       hidden: false,
       frozen: false,
@@ -116,7 +116,7 @@ impl Object {
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
 pub enum Material {
-  Player(u32),
+  Player,
   Wall,
   Death,
   None,
@@ -138,7 +138,7 @@ impl Material {
   }
   pub fn color(&self) -> i32 {
     match self {
-      Self::Player(_) => 0, // White + Black Outline
+      Self::Player => 0, // White + Black Outline
       Self::Wall => 1,      // Black
       Self::Death => 2,     // Red
                             

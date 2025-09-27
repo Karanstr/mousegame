@@ -7,8 +7,8 @@ use super::level::Action;
 
 #[derive(Deserialize)]
 pub struct InitialLevel {
-  pub spawnpoints: [IVec2; 3],
-  pub objects: Vec<MinimalRect>
+  pub buttons: [u8; 16],
+  pub objects: Vec<MinimalRect>,
 }
 
 #[derive(Deserialize)]

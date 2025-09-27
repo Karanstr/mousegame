@@ -1,13 +1,40 @@
 {
-  "spawnpoints": [
-    [10, 10],
-    [30, 10],
-    [10, 30]
-  ],
+  "buttons": [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
 	"objects": [
+    {
+			"position": [-400, -400],
+			"length": [10, 800],
+			"material": "Wall",
+			"animation": null,
+      "receivers": []
+    },
 		{ 
-			"position": [150,225],
-			"length": [200,50],
+			"position": [400, -400],
+			"length": [-10, 800],
+			"material": "Wall",
+			"animation": null,
+      "receivers": []
+		},
+    {
+			"position": [-400, -400],
+			"length": [800, 10],
+			"material": "Wall",
+			"animation": null,
+      "receivers": []
+    },
+    {
+			"position": [-400, 400],
+			"length": [800, -10],
+			"material": "Wall",
+			"animation": null,
+      "receivers": []
+    },
+		
+
+
+    { 
+			"position": [50, 50],
+			"length": [100, 30],
 			"material": "Wall",
 			"animation": null,
       "receivers": [
@@ -15,38 +42,34 @@
       ]
 		},
 		{ 
-			"position": [225,150],
-			"length": [50,200],
-			"material": "Wall",
-			"animation": null,
-      "receivers": []
-		},
-		{ 
-			"position": [300,300],
-			"length": [250, 50],
+			"position": [100, 0],
+			"length": [20, 20],
 			"material": {
         "Button": [0, 0]
       },
 			"animation": null,
       "receivers": []
 		},
+
     {
-			"position": [200,400],
+			"position": [200,200],
 			"length": [100, 100],
 			"material": "Death",
 			"animation": [
         {
-          "destination": [400, 400],
+          "destination": [-100, -100],
           "duration": 500,
           "sleep": 50
         },
         {
-          "destination": [200, 400],
+          "destination": [200, 200],
           "duration": 500,
           "sleep": 50
         }
       ],
-      "receivers": []
+      "receivers": [
+        ["Pause", 0]
+      ]
     }
 	]
 }

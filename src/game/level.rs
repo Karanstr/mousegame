@@ -12,6 +12,7 @@ use super::state::ObjectUpdate;
 pub enum Action {
   Pause,
   Hide,
+  Win,
 }
 #[derive(PartialEq, Eq, Hash)]
 struct RemoteControl {
@@ -27,9 +28,8 @@ pub struct Level {
   pub animated: HashSet<usize>,
   
   events: Mutex<Vec<CollisionEvent>>,
-  spawnpoints: [IVec2; 3],
   players_on_button: HashMap<usize, usize>, // id, channel
-  button_requirements: [u8; 8], // Arbitrarily support win + 7 channels
+  button_requirements: [u8; 16], // Arbitrarily support 16 channels
   receivers: HashSet<RemoteControl>,
 }
 impl Level {
@@ -42,8 +42,8 @@ impl Level {
     self.register_movement(physics.body_sets().0, state_changes);
   }
   
-  fn handle_remote(&mut self, state_changes: &mut HashMap<usize, ObjectUpdate>) {
-    let mut channels_held = [0; 8];
+  fn handle_remote(&mut self, state_changes: &mut HashMap<usize, ObjectUpdate>) -> bool {
+    let mut channels_held = [0; 16];
     for channel in self.players_on_button.values() { channels_held[*channel as usize] += 1; }
     for receiver in self.receivers.iter() {
       let activate = channels_held[receiver.channel as usize] >= self.button_requirements[receiver.channel as usize];
@@ -59,8 +59,14 @@ impl Level {
               .or_insert(ObjectUpdate::new()).hidden(activate);
           }
         }
+        Action::Win => {
+          if activate {
+            return true
+          }
+        }
       }
     }
+    false
   }
 
   fn handle_event(&mut self, event: CollisionEvent, physics: &mut Physics, state_changes: &mut HashMap<usize, ObjectUpdate>) {
@@ -72,15 +78,13 @@ impl Level {
     let id_1 = id_from_collider(handle_1, &rigids, &colliders);
     let id_2 = id_from_collider(handle_2, &rigids, &colliders);
     let (player_id, sensor_id) = if matches!(
-      self.objects.get(id_1).unwrap().material,
-      Material::Player(_)
+      self.objects.get(id_1).unwrap().material, Material::Player
     ) { (id_1, id_2) } else { (id_2, id_1) };
     let sensor_type = self.objects.get(sensor_id).unwrap().material;
     match sensor_type {
       Material::Death => {
-        let Material::Player(player_num) = self.objects.get(player_id).unwrap().material else { unreachable!() };
-        let spawnpoint = self.spawnpoints[player_num as usize];
-        self.set_rapier_pos(player_id, rigids, spawnpoint);
+        let Material::Player = self.objects.get(player_id).unwrap().material else { unreachable!() };
+        self.set_rapier_pos(player_id, rigids, IVec2::ZERO);
       }
       Material::Button(channel, _) => {
         let button= self.objects.get_mut(sensor_id).unwrap();
@@ -138,16 +142,15 @@ impl Level {
       players: HashSet::new(),
       animated: HashSet::new(),
       events: Mutex::new(Vec::new()),
-      spawnpoints: [IVec2::ZERO; 3],
       players_on_button: HashMap::new(),
-      button_requirements: [1; 8],
+      button_requirements: [1; 16],
       receivers: HashSet::new(),
     };
     let json = std::fs::read_to_string(
       format!("{}/levels/{}", env!("CARGO_MANIFEST_DIR"), level)
     ).unwrap();
     let deser_level: InitialLevel = serde_json::from_str(&json).unwrap();
-    new.spawnpoints = deser_level.spawnpoints;
+    new.button_requirements = deser_level.buttons;
     for min_obj in deser_level.objects {
       let recievers = min_obj.receivers.clone();
       new.add_object(min_obj.full_rect(), recievers, physics, false);

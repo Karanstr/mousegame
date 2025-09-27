@@ -142,7 +142,7 @@ impl GameState {
 
   fn add_player(&mut self, connection_id: Uuid) {
     let object_id = self.level.add_object(
-      Object::new_mouse(IVec2::new(100, 100), 0),
+      Object::new_mouse(IVec2::new(100, 100)),
       Vec::new(), &mut self.physics, true
     );
     self.player_list.insert(connection_id, object_id);

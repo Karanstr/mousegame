@@ -37,12 +37,14 @@ export default class Entity {
   }
   
   render(ctx) {
+    let center = new Vec2(window.innerWidth / 2, window.innerHeight / 2);
+    let real_pos = this.pos.add(center);
     if (this.hidden) { return }
     ctx.fillStyle = this.color;
     ctx.beginPath();
-    ctx.moveTo(this.points[0].x + this.pos.x, this.points[0].y + this.pos.y);
+    ctx.moveTo(this.points[0].x + real_pos.x, this.points[0].y + real_pos.y);
     for (let i = 1; i < this.points.length; i++) {
-      let translated = this.points[i].add(this.pos);
+      let translated = this.points[i].add(real_pos);
       ctx.lineTo(translated.x, translated.y);
     }
     ctx.closePath();
