@@ -95,6 +95,7 @@ impl GameState {
   }
 
   pub fn tick(&mut self) { 
+    self.level.step_animations(&mut self.physics);
     self.physics.step(&mut self.level);
     self.level.tick(&mut self.physics, &mut self.state_changes);
   }

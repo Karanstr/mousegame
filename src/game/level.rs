@@ -12,51 +12,68 @@ use super::state::ObjectUpdate;
 pub struct Level {
   objects: Pond<Object>,
   pub list: HashMap<usize, RigidBodyHandle>,
-  pub movable: HashSet<usize>,
+  pub players: HashSet<usize>,
+  pub animated: HashSet<usize>,
   events: Mutex<Vec<CollisionEvent>>,
   spawnpoints: [IVec2; 3]
 }
 impl Level {
   pub fn tick(&mut self, physics: &mut Physics, state_changes: &mut HashMap<usize, ObjectUpdate>) {
-    let (rigids, colliders) = physics.body_sets();
     for event in self.events.get_mut().clone() {
-      let (started, handle_1, handle_2) = match event {
-        CollisionEvent::Started(handle_1, handle_2, _) => {
-          (true, handle_1, handle_2)
-        }
-        CollisionEvent::Stopped(handle1, handle2, _) => {
-          (false, handle1, handle2)
-        }
-      };
-      let id_1 = id_from_collider(handle_1, &rigids, &colliders);
-      let id_2= id_from_collider(handle_2, &rigids, &colliders);
-      let (player_id, sensor_id) = if matches!(
-        self.objects.get(id_1).unwrap().material,
-        Material::Player(_)
-      ) { (id_1, id_2) } else { (id_2, id_1) };
-      let sensor_type = self.objects.get(sensor_id).unwrap().material;
-      match sensor_type {
-        Material::Death => {
-          let Material::Player(player_num) = self.objects.get(player_id).unwrap().material else { unreachable!() };
-          let spawnpoint = self.spawnpoints[player_num as usize];
-          self.set_rapier_pos(player_id, rigids, spawnpoint);
-        }
-        Material::Button(channel, active) => {
-          let button= self.objects.get_mut(sensor_id).unwrap();
-          button.material.set_active(started);
-          state_changes.entry(sensor_id)
-            .or_insert(ObjectUpdate::new()).material(button.material);
-        }
-        _ => unimplemented!()
-      }
+      self.handle_event(event, physics, state_changes);
     }
     self.events.get_mut().clear();
-    self.register_movement(rigids, state_changes);
+    self.register_movement(physics.body_sets().0, state_changes);
   }
 
+  fn handle_event(&mut self, event: CollisionEvent, physics: &mut Physics, state_changes: &mut HashMap<usize, ObjectUpdate>) {
+    let (rigids, colliders) = physics.body_sets();
+    let (started, handle_1, handle_2) = match event {
+      CollisionEvent::Started(h1, h2, _) => (true, h1, h2),
+      CollisionEvent::Stopped(h1, h2, _) => (false, h1, h2),
+    };
+    let id_1 = id_from_collider(handle_1, &rigids, &colliders);
+    let id_2= id_from_collider(handle_2, &rigids, &colliders);
+    let (player_id, sensor_id) = if matches!(
+      self.objects.get(id_1).unwrap().material,
+      Material::Player(_)
+    ) { (id_1, id_2) } else { (id_2, id_1) };
+    let sensor_type = self.objects.get(sensor_id).unwrap().material;
+    match sensor_type {
+      Material::Death => {
+        let Material::Player(player_num) = self.objects.get(player_id).unwrap().material else { unreachable!() };
+        let spawnpoint = self.spawnpoints[player_num as usize];
+        self.set_rapier_pos(player_id, rigids, spawnpoint);
+      }
+      Material::Button(_channel, _active) => {
+        let button= self.objects.get_mut(sensor_id).unwrap();
+        button.material.set_active(started);
+        state_changes.entry(sensor_id)
+          .or_insert(ObjectUpdate::new()).material(button.material);
+      }
+      _ => unimplemented!()
+    }
+  }
+
+  pub fn step_animations(&mut self, physics: &mut Physics) {
+    for id in &self.animated.clone() {
+      let object = self.objects.get_mut(*id).unwrap();
+      let new_pos = object.animation.as_mut().unwrap().step();
+      self.set_rapier_pos(*id, physics.body_sets().0, new_pos);
+    }
+  }
 
   pub fn register_movement(&mut self, rigids: &mut RigidBodySet, state_changes: &mut HashMap<usize, ObjectUpdate>) {
-    for id in &self.movable {
+    for id in &self.animated {
+      let new_pos = self.get_rapier_pos(*id, rigids);
+      let old_pos = &mut self.objects.get_mut(*id).unwrap().position;
+      if *old_pos != new_pos {
+        state_changes.entry(*id)
+          .or_insert(ObjectUpdate::new()).position(new_pos);
+        *old_pos = new_pos;
+      }
+    }
+    for id in &self.players {
       let new_pos = self.get_rapier_pos(*id, rigids);
       let old_pos = &mut self.objects.get_mut(*id).unwrap().position;
       if *old_pos != new_pos {
@@ -75,7 +92,8 @@ impl Level {
     let mut new = Self { 
       objects: Pond::new(),
       list: HashMap::new(),
-      movable: HashSet::new(),
+      players: HashSet::new(),
+      animated: HashSet::new(),
       events: Mutex::new(Vec::new()),
       spawnpoints: [IVec2::ZERO; 3],
     };
@@ -90,7 +108,7 @@ impl Level {
     new
   }
 
-  pub fn add_object(&mut self, object: Object, physics: &mut Physics, can_move: bool) -> usize {
+  pub fn add_object(&mut self, object: Object, physics: &mut Physics, player: bool) -> usize {
     let id = self.objects.alloc(object);
     let object = self.objects.get_mut(id).unwrap();
     object.rigidbody.user_data = id as u128;
@@ -102,18 +120,18 @@ impl Level {
       rigids
     );
     self.list.insert(id, rb_handle);
-    if can_move || object.animation.is_some() { self.movable.insert(id); }
+    if object.animation.is_some() { self.animated.insert(id); }
+    if player { self.players.insert(id); }
     id
   }
 
   pub fn apply_vel(&mut self, rigids: &mut RigidBodySet, id: usize, velocity: IVec2) {
-    if self.movable.contains(&id) {
-      let handle = self.list.get(&id).unwrap();
-      let rb = rigids.get_mut(*handle).unwrap();
-      let mass = rb.mass();
-      let impulse = velocity.as_vec2() * mass;
-      rb.apply_impulse(Vector2::new(impulse.x as f32, impulse.y as f32), true);
-    } else { dbg!("Failed to add velocity to collider"); }
+    if !self.players.contains(&id) { dbg!("Failed to add velocity to collider"); return; }
+    let handle = self.list.get(&id).unwrap();
+    let rb = rigids.get_mut(*handle).unwrap();
+    let mass = rb.mass();
+    let impulse = velocity.as_vec2() * mass;
+    rb.apply_impulse(Vector2::new(impulse.x as f32, impulse.y as f32), true);
   }
 
   pub fn get_obj(&self, id: usize) -> Option<&Object> { self.objects.get(id) }

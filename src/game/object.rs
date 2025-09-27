@@ -6,9 +6,33 @@ use serde::{Deserialize, Serialize};
 // This could be adapted to work with bezier curves + rotations, etc
 #[derive(Deserialize, Clone, Copy)]
 pub struct Step {
-  vector: IVec2, 
-  ticks_duration: u32,
-  ticks_pause: i32,
+  destination: IVec2,
+  duration: u32,
+  sleep: u32,
+}
+pub struct Path {
+  last_checkpoint: IVec2,
+  steps: Vec<Step>,
+  current_step: u32,
+  current_tick: u32,
+  ticks_sleeping: u32,
+}
+impl Path {
+  pub fn step(&mut self) -> IVec2 {
+    if self.ticks_sleeping != 0 { self.ticks_sleeping -= 1; }
+    else { self.current_tick += 1; }
+    let step = &self.steps[self.current_step as usize];
+    let interpolate = self.current_tick as f32 / step.duration as f32;
+    let current = self.last_checkpoint.as_vec2().lerp(step.destination.as_vec2(), interpolate);
+    if self.current_tick > step.duration {
+      self.current_tick = 0;
+      self.last_checkpoint = step.destination;
+      self.ticks_sleeping = step.sleep;
+      self.current_step += 1;
+      self.current_step %= self.steps.len() as u32;
+    }
+    current.as_ivec2()
+  }
 }
 
 pub struct Object {
@@ -17,7 +41,7 @@ pub struct Object {
   pub collider: Collider,
   pub rigidbody: RigidBody,
   pub material: Material,
-  pub animation: Option<Vec<Step>>,
+  pub animation: Option<Path>,
 }
 impl Object {
   pub fn new_mouse(position: IVec2, player: u32) -> Self {
@@ -64,13 +88,20 @@ impl Object {
     let rigidbody = RigidBodyBuilder::new(RigidBodyType::Fixed)
       .translation(Vector2::new(top_left.x as f32, top_left.y as f32))
       .build();
+    let animation = if let Some(steps) = animation { Some(Path {
+      last_checkpoint: top_left,
+      steps,
+      current_step: 0,
+      current_tick: 0,
+      ticks_sleeping: 0,
+    }) } else { None };
     Self {
       points: vec![IVec2::ZERO, length.with_x(0), length, length.with_y(0)],
       position: top_left,
       collider: collider.build(),
       rigidbody,
       material,
-      animation
+      animation,
     }
   }
 
@@ -114,8 +145,6 @@ impl Material {
     }
   }
   pub fn set_active(&mut self, activity: bool) {
-    if let Self::Button(_, active) = self {
-      *active = activity;
-    }
+    if let Self::Button(_, active) = self { *active = activity; }
   }
 }
