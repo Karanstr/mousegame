@@ -7,6 +7,7 @@ export default class Entity {
     this.color = color;
     this.outline = false;
     this.points = []; // Points = [Vec2]
+    this.hidden = false;
   }
 
   update_material(material) {
@@ -36,6 +37,7 @@ export default class Entity {
   }
   
   render(ctx) {
+    if (this.hidden) { return }
     ctx.fillStyle = this.color;
     ctx.beginPath();
     ctx.moveTo(this.points[0].x + this.pos.x, this.points[0].y + this.pos.y);

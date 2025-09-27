@@ -14,16 +14,19 @@ enum StateFlags {
   Position = 0b00000001, // Size: 8 -- 2
   Shape    = 0b00000010, // Size: 4 + 8*length -- 1 + 2 * length
   Material = 0b00000100, // Size: 4 -- 1
+  Hide     = 0b00001000, // Size: 0
+  Show     = 0b00010000, // Size: 0
 }
 #[derive(Clone)]
 pub struct ObjectUpdate {
   position: Option<IVec2>,
   shape: Option<Vec<IVec2>>,
   material: Option<Material>,
+  hidden: bool
 }
 impl ObjectUpdate {
   pub fn new() -> Self {
-    Self {position: None, shape: None, material: None, }
+    Self {position: None, shape: None, material: None, hidden: false}
   }
   pub fn position(&mut self, position: IVec2) -> &mut Self {
     self.position = Some(position);
@@ -37,11 +40,16 @@ impl ObjectUpdate {
     self.material = Some(material);
     self
   }
+  pub fn hidden(&mut self, hidden: bool) -> &mut Self {
+    self.hidden = hidden;
+    self
+  }
   pub fn to_binary(&self) -> Vec<i32> {
     let flag = 
       if self.position.is_some() { StateFlags::Position as i32 } else { 0 } |
-      if self.shape.is_some() { StateFlags::Shape as i32 } else { 0 } | 
-      if self.material.is_some() { StateFlags::Material as i32 } else { 0 };
+      if self.shape.is_some() { StateFlags::Shape as i32 } else { 0 }       | 
+      if self.material.is_some() { StateFlags::Material as i32 } else { 0 } |
+      if self.hidden { StateFlags::Hide as i32 } else { StateFlags::Show as i32};
     let mut data = Vec::new();
     data.push(flag);
     if let Some(position) = self.position {
@@ -107,7 +115,12 @@ impl GameState {
           self.add_player(server.connect_socket(socket));
           self.send_full = true;
         },
-        Event::Disconnect(id) => { server.list.remove(&id); }
+        Event::Disconnect(id) => { 
+          server.list.remove(&id);
+          // let obj_key = self.level.delete(&id);
+          // self.state_changes.entry(&obj_key)
+          //   .or_insert(ObjectUpdate::new());
+        }
         Event::Binary(id, message) => {
           if let Message::Binary(bytes) = message {
             let real_bytes = bytes.to_vec();
@@ -130,7 +143,7 @@ impl GameState {
   fn add_player(&mut self, connection_id: Uuid) {
     let object_id = self.level.add_object(
       Object::new_mouse(IVec2::new(100, 100), 0),
-      &mut self.physics, true
+      Vec::new(), &mut self.physics, true
     );
     self.player_list.insert(connection_id, object_id);
     let object = self.level.get_obj(object_id).unwrap();
@@ -142,3 +155,4 @@ impl GameState {
     self.state_changes.insert(object_id, update);
   }
 }
+

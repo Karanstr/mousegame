@@ -29,6 +29,12 @@ export default class Level {
       entity.update_material(data[idx]);
       idx += 1;
     }
+    if ((flags & 0b1000) != 0) {
+      entity.hidden = true;
+    }
+    if ((flags & 0b10000) != 0) {
+      entity.hidden = false;
+    }
     this.entities.set(key, entity);
   }
 

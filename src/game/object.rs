@@ -42,6 +42,9 @@ pub struct Object {
   pub rigidbody: RigidBody,
   pub material: Material,
   pub animation: Option<Path>,
+  pub hidden: bool,
+  pub frozen: bool,
+
 }
 impl Object {
   pub fn new_mouse(position: IVec2, player: u32) -> Self {
@@ -72,6 +75,8 @@ impl Object {
       rigidbody,
       material: Material::Player(player),
       animation: None,
+      hidden: false,
+      frozen: false,
     }
   }
   
@@ -102,6 +107,8 @@ impl Object {
       rigidbody,
       material,
       animation,
+      hidden: false,
+      frozen: false,
     }
   }
 
@@ -113,7 +120,7 @@ pub enum Material {
   Wall,
   Death,
   None,
-  Button(u32, bool),
+  Button(u32, u8),
 }
 impl Material {
   pub fn is_sensor(&self) -> bool {
@@ -136,15 +143,18 @@ impl Material {
       Self::Death => 2,     // Red
                             
       Self::Button(x, active) 
-        if *x == 0 && *active => 3, // Lime
+        if *x == 0 && *active != 0 => 3, // Lime
 
       Self::Button(x, active)
-        if *x == 0 && !*active => 4, // Green
+        if *x == 0 && *active == 0 => 4, // Green
 
       _ => unimplemented!(),
     }
   }
   pub fn set_active(&mut self, activity: bool) {
-    if let Self::Button(_, active) = self { *active = activity; }
+    if let Self::Button(_, active) = self { 
+      *active = if activity { *active + 1 } else { *active - 1 };
+    }
   }
 }
+

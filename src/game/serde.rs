@@ -3,6 +3,7 @@ use super::Material;
 use super::object::Step;
 use glam::IVec2;
 use serde::Deserialize;
+use super::level::Action;
 
 #[derive(Deserialize)]
 pub struct InitialLevel {
@@ -16,6 +17,7 @@ pub struct MinimalRect {
   length: IVec2,
   material: Material,
   animation: Option<Vec<Step>>,
+  pub receivers: Vec<(Action, u8)>, // (Action, channel)
 }
 impl MinimalRect {
   pub fn full_rect(&self) -> Object {

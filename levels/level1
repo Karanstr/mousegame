@@ -9,21 +9,26 @@
 			"position": [150,225],
 			"length": [200,50],
 			"material": "Wall",
-			"animation" :null
+			"animation": null,
+      "receivers": [
+        ["Hide", 0]
+      ]
 		},
 		{ 
 			"position": [225,150],
 			"length": [50,200],
 			"material": "Wall",
-			"animation" :null
+			"animation": null,
+      "receivers": []
 		},
 		{ 
 			"position": [300,300],
 			"length": [250, 50],
 			"material": {
-        "Button": [0, false]
+        "Button": [0, 0]
       },
-			"animation" :null
+			"animation": null,
+      "receivers": []
 		},
     {
 			"position": [200,400],
@@ -40,7 +45,8 @@
           "duration": 500,
           "sleep": 50
         }
-      ]
+      ],
+      "receivers": []
     }
 	]
 }
