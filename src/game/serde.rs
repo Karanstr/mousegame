@@ -1,36 +1,16 @@
-use crate::game::{Level, Object};
-
+use crate::game::Object;
 use super::Material;
 use super::object::Step;
 use glam::IVec2;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 pub struct InitialLevel {
-  spawnpoints: Vec<IVec2>,
+  pub spawnpoints: Vec<IVec2>,
   pub objects: Vec<MinimalRect>
 }
-impl InitialLevel {
-  // Exists as a reminder and futureproofing
-  pub fn _new(level: &Level) -> Self {
-    let mut objects= Vec::new();
-    for (id, _) in &level.list {
-      let full_obj = level.get_obj(*id).unwrap();
-      objects.push(MinimalRect {
-        position: full_obj.position,
-        length: full_obj.points[2],
-        material: full_obj.material,
-        animation: full_obj.animation.clone(),
-      });
-    }
-    Self {
-      spawnpoints: Vec::new(),
-      objects,
-    }
-  }
-}
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 pub struct MinimalRect {
   position: IVec2,
   length: IVec2,

@@ -18,7 +18,7 @@ const socket = new WebSocket("ws://localhost:8080/ws");
 socket.onopen = () => { connected = true; };
 socket.onclose = () => { connected = false; };
 
-canvas.addEventListener("click", async () => { await canvas.requestPointerLock({ unadjustedMovement: true }); });
+canvas.addEventListener("click", async () => { await canvas.requestPointerLock(); });
 const sensitivity = document.getElementById("sensitivity");
 canvas.addEventListener("mousemove", (e) => {
   // Only send mouse movement when locked

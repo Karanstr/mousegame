@@ -4,7 +4,7 @@ use rapier2d::na::Vector2;
 use serde::{Deserialize, Serialize};
 
 // This could be adapted to work with bezier curves + rotations, etc
-#[derive(Serialize, Deserialize, Clone, Copy)]
+#[derive(Deserialize, Clone, Copy)]
 pub struct Step {
   vector: IVec2, 
   ticks_duration: u32,
@@ -20,7 +20,7 @@ pub struct Object {
   pub animation: Option<Vec<Step>>,
 }
 impl Object {
-  pub fn new_mouse(position: IVec2) -> Self {
+  pub fn new_mouse(position: IVec2, player: u32) -> Self {
     let points = vec![
       IVec2::new(0, 0),
       IVec2::new(0, 16),
@@ -46,7 +46,7 @@ impl Object {
       position: position.into(),
       collider,
       rigidbody,
-      material: Material::Player,
+      material: Material::Player(player),
       animation: None,
     }
   }
@@ -74,66 +74,48 @@ impl Object {
     }
   }
 
-  // Serializer
-  // Binary Format:
-  // [key, color, position, point_count, points (x, y, x, y)]
-  // Passing the key in is stupid, but I want this to work soon and I have stuff to do
-  pub fn to_binary(&self, key: usize) -> Vec<i32> {
-    let mut data = Vec::new();
-    data.push(key as i32);
-    data.push(self.material as i32);
-    data.push(self.position.x);
-    data.push(self.position.y);
-    data.push(self.points.len() as i32);
-    for point in &self.points {
-      data.push(point.x);
-      data.push(point.y);
-    }
-    data
-  }
-  
 }
 
-
-#[repr(u8)]
 #[derive(Clone, Copy, Serialize, Deserialize)]
 pub enum Material {
-  Player,
+  Player(u32),
   Wall,
   Death,
-  WinOn,
-  WinOff,
-  // BlueButton,
-  // OrangeButton,
-  // PurpleButton,
-  // PinkButton,
+  None,
+  Button(u32, bool),
 }
 impl Material {
-  pub fn can_move(&self) -> bool {
-    match self {
-      Material::Player => true,
-      Material::Wall => false,
-      Material::Death => false,
-      Material::WinOn => false,
-      Material::WinOff => false,
-    }
-  }
   pub fn is_sensor(&self) -> bool {
     match self {
-      Material::Player => false,
-      Material::Wall => false,
-      Material::Death => false,
-      Material::WinOn => true,
-      Material::WinOff => true,
+      Self::Button(_, _) => true,
+      _ => false,
     }
   }
   pub fn has_event(&self) -> bool {
     match self {
-      Material::Player => false,
-      Material::Wall => false,
-      Material::Death => true,
-      Material::WinOn => true,
-      Material::WinOff => true,
+      Self::Death => true,
+      Self::Button(_, _) => true,
+      _ => false,
+    }
+  }
+  pub fn color(&self) -> i32 {
+    match self {
+      Self::Player(_) => 0, // White + Black Outline
+      Self::Wall => 1,      // Black
+      Self::Death => 2,     // Red
+                            
+      Self::Button(x, active) 
+        if *x == 0 && *active => 3, // Lime
+
+      Self::Button(x, active)
+        if *x == 0 && !*active => 4, // Green
+
+      _ => unimplemented!(),
+    }
+  }
+  pub fn toggle(&mut self) {
+    if let Self::Button(_, active) = self {
+      *active = !*active;
     }
   }
 }

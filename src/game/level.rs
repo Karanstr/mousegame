@@ -9,7 +9,6 @@ use super::{Object, Physics, serde::InitialLevel};
 use super::state::ObjectUpdate;
 
 
-// Objects must be assigned visibility *or* we send each client a camera position
 pub struct Level {
   objects: Pond<Object>,
   pub list: HashMap<usize, RigidBodyHandle>,
@@ -17,11 +16,9 @@ pub struct Level {
   events: Mutex<Vec<CollisionEvent>>,
 }
 impl Level {
-
   pub fn tick(&mut self, physics: &mut Physics, state_changes: &mut HashMap<usize, ObjectUpdate>) {
     let (rigids, colliders) = physics.body_sets();
-    let events = self.events.get_mut();
-    for event in events.into_iter() {
+    for event in self.events.get_mut().into_iter() {
       let (started, handle_1, handle_2) = match event {
         CollisionEvent::Started(handle_1, handle_2, _) => {
           (true, handle_1, handle_2)
@@ -30,21 +27,27 @@ impl Level {
           (false, handle1, handle2)
         }
       };
-      let rbh_1 = colliders.get(*handle_1).unwrap().parent().unwrap();
-      let rbh_2 = colliders.get(*handle_2).unwrap().parent().unwrap();
-      let id_1 = rigids.get(rbh_1).unwrap().user_data as usize;
-      let id_2 = rigids.get(rbh_2).unwrap().user_data as usize;
-      let (player_id, button_id) = if matches!(self.objects.get(id_1).unwrap().material, Material::Player) { 
-        (id_1, id_2)
-      } else { (id_2, id_1) };
-      let button = self.objects.get_mut(button_id).unwrap();
-      if started { button.material = Material::WinOn } else { button.material = Material::WinOff }
-      let cur_state = state_changes.remove(&button_id)
-        .unwrap_or_else(|| ObjectUpdate::new())
-        .material(button.material);
-      state_changes.insert(button_id, cur_state);
+      let id_1 = id_from_collider(*handle_1, &rigids, &colliders);
+      let id_2= id_from_collider(*handle_2, &rigids, &colliders);
+      let (player_id, sensor_id) = if matches!(
+        self.objects.get(id_1).unwrap().material,
+        Material::Player(_)
+      ) { (id_1, id_2) } else { (id_2, id_1) };
+      let sensor_type = self.objects.get(sensor_id).unwrap().material;
+      match sensor_type {
+        Material::Death => {
+
+        }
+        Material::Button(channel, active) => {
+          let button= self.objects.get_mut(sensor_id).unwrap();
+          button.material.toggle();
+          state_changes.entry(sensor_id)
+            .or_insert(ObjectUpdate::new()).material(button.material);
+        }
+        _ => unimplemented!()
+      }
     }
-    events.clear();
+    self.events.get_mut().clear();
     self.register_movement(rigids, state_changes);
   }
 
@@ -54,53 +57,21 @@ impl Level {
       let new_pos = self.get_rapier_pos(*id, rigids);
       let old_pos = &mut self.objects.get_mut(*id).unwrap().position;
       if *old_pos != new_pos {
-        let cur_state = state_changes.remove(id)
-          .unwrap_or_else(|| ObjectUpdate::new())
-          .position(new_pos);
-        state_changes.insert(*id, cur_state);
+        state_changes.entry(*id)
+          .or_insert(ObjectUpdate::new()).position(new_pos);
         *old_pos = new_pos;
       }
     }
   }
 
 }
+
+fn id_from_collider(handle: ColliderHandle, rigids: &RigidBodySet, colliders: &ColliderSet) -> usize {
+  let rbh = colliders.get(handle).unwrap().parent().unwrap();
+  rigids.get(rbh).unwrap().user_data as usize
+}
+
 impl Level {
-  pub fn apply_vel(&mut self, rigids: &mut RigidBodySet, id: usize, velocity: IVec2) {
-    if self.movable.contains(&id) {
-      let handle = self.list.get(&id).unwrap();
-      let rb = rigids.get_mut(*handle).unwrap();
-      let mass = rb.mass();
-      let impulse = velocity.as_vec2() * mass;
-      rb.apply_impulse(Vector2::new(impulse.x as f32, impulse.y as f32), true);
-    } else { dbg!("Failed to add velocity to collider"); }
-  }
-
-  pub fn get_obj(&self, id: usize) -> Option<&Object> { self.objects.get(id) }
-
-  pub fn get_pos(&self, id: usize) -> IVec2 { self.objects.get(id).unwrap().position }
-
-  fn get_rapier_pos(&self, id: usize, rigids: &mut RigidBodySet) -> IVec2 {
-    let handle = self.list.get(&id).unwrap();
-    let bad_pos = rigids.get(*handle).unwrap().position().translation;
-    IVec2::new(bad_pos.x as i32, bad_pos.y as i32)
-  }
-
-  pub fn add_object(&mut self, object: Object, physics: &mut Physics) -> usize {
-    let id = self.objects.alloc(object);
-    let object = self.objects.get_mut(id).unwrap();
-    object.rigidbody.user_data = id as u128;
-    let (rigids, colliders) = physics.body_sets();
-    let rb_handle = rigids.insert(object.rigidbody.clone());
-    colliders.insert_with_parent(
-      object.collider.clone(),
-      rb_handle,
-      rigids
-    );
-    self.list.insert(id, rb_handle);
-    if object.material.can_move() { self.movable.insert(id); }
-    id
-  }
-
   pub fn new(level: String, physics: &mut Physics) -> Self {
     physics.reset_bodies();
     let mut new = Self { 
@@ -114,15 +85,47 @@ impl Level {
     ).unwrap();
     let deser_level: InitialLevel = serde_json::from_str(&json).unwrap();
     for min_obj in deser_level.objects {
-      new.add_object(min_obj.full_rect(), physics);
+      new.add_object(min_obj.full_rect(), physics, false);
     }
     new
   }
 
+  pub fn add_object(&mut self, object: Object, physics: &mut Physics, can_move: bool) -> usize {
+    let id = self.objects.alloc(object);
+    let object = self.objects.get_mut(id).unwrap();
+    object.rigidbody.user_data = id as u128;
+    let (rigids, colliders) = physics.body_sets();
+    let rb_handle = rigids.insert(object.rigidbody.clone());
+    colliders.insert_with_parent(
+      object.collider.clone(),
+      rb_handle,
+      rigids
+    );
+    self.list.insert(id, rb_handle);
+    if can_move { self.movable.insert(id); }
+    id
+  }
+
+  pub fn apply_vel(&mut self, rigids: &mut RigidBodySet, id: usize, velocity: IVec2) {
+    if self.movable.contains(&id) {
+      let handle = self.list.get(&id).unwrap();
+      let rb = rigids.get_mut(*handle).unwrap();
+      let mass = rb.mass();
+      let impulse = velocity.as_vec2() * mass;
+      rb.apply_impulse(Vector2::new(impulse.x as f32, impulse.y as f32), true);
+    } else { dbg!("Failed to add velocity to collider"); }
+  }
+
+  pub fn get_obj(&self, id: usize) -> Option<&Object> { self.objects.get(id) }
+
+  fn get_rapier_pos(&self, id: usize, rigids: &mut RigidBodySet) -> IVec2 {
+    let handle = self.list.get(&id).unwrap();
+    let bad_pos = rigids.get(*handle).unwrap().position().translation;
+    IVec2::new(bad_pos.x as i32, bad_pos.y as i32)
+  }
 }
 
 impl EventHandler for Level {
-  
   fn handle_collision_event(
     &self,
     _: &RigidBodySet,

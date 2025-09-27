@@ -15,6 +15,7 @@ enum StateFlags {
   Shape    = 0b00000010, // Size: 4 + 8*length -- 1 + 2 * length
   Material = 0b00000100, // Size: 4 -- 1
 }
+#[derive(Clone)]
 pub struct ObjectUpdate {
   position: Option<IVec2>,
   shape: Option<Vec<IVec2>>,
@@ -24,19 +25,19 @@ impl ObjectUpdate {
   pub fn new() -> Self {
     Self {position: None, shape: None, material: None, }
   }
-  pub fn position(mut self, position: IVec2) -> Self {
+  pub fn position(&mut self, position: IVec2) -> &mut Self {
     self.position = Some(position);
     self
   }
-  pub fn shape(mut self, shape: Vec<IVec2>) -> Self {
+  pub fn shape(&mut self, shape: Vec<IVec2>) -> &mut Self {
     self.shape = Some(shape);
     self
   }
-  pub fn material(mut self, material: Material) -> Self {
+  pub fn material(&mut self, material: Material) -> &mut Self {
     self.material = Some(material);
     self
   }
-  pub fn to_binary(self) -> Vec<i32> {
+  pub fn to_binary(&self) -> Vec<i32> {
     let flag = 
       if self.position.is_some() { StateFlags::Position as i32 } else { 0 } |
       if self.shape.is_some() { StateFlags::Shape as i32 } else { 0 } | 
@@ -47,7 +48,7 @@ impl ObjectUpdate {
       data.push(position.x);
       data.push(position.y);
     }
-    if let Some(shape) = self.shape {
+    if let Some(shape) = self.shape.clone() {
       data.push(shape.len() as i32);
       for point in shape {
         data.push(point.x);
@@ -55,7 +56,7 @@ impl ObjectUpdate {
       }
     }
     if let Some(material) = self.material {
-      data.push(material as i32)
+      data.push(material.color())
     }
     data
   }
@@ -80,7 +81,8 @@ impl GameState {
       let update = ObjectUpdate::new()
         .position(object.position)
         .shape(object.points.clone())
-        .material(object.material);
+        .material(object.material)
+        .clone();
       state_changes.insert(*id, update);
     }
     Self {
@@ -92,26 +94,6 @@ impl GameState {
     }
   }
 
-  fn update_player(&mut self, id: Uuid, delta: IVec2) {
-    let handle = self.player_list.get(&id).unwrap();
-    self.level.apply_vel(self.physics.body_sets().0, *handle, delta);
-  }
-
-  fn add_player(&mut self, connection_id: Uuid) {
-    let object_id = self.level.add_object(
-      Object::new_mouse(IVec2::new(100, 100)),
-      &mut self.physics
-     );
-    self.player_list.insert(connection_id, object_id);
-    let object = self.level.get_obj(object_id).unwrap();
-    let update = ObjectUpdate::new()
-      .position(object.position)
-      .shape(object.points.clone())
-      .material(object.material);
-    self.state_changes.insert(object_id, update);
-  }
-
-  // Move all state handling out here?
   pub fn tick(&mut self) { 
     self.physics.step(&mut self.level);
     self.level.tick(&mut self.physics, &mut self.state_changes);
@@ -135,5 +117,27 @@ impl GameState {
       }
     }
   }
+}
 
+// Add Player, UpdatePlayer
+impl GameState {
+  fn update_player(&mut self, id: Uuid, delta: IVec2) {
+    let handle = self.player_list.get(&id).unwrap();
+    self.level.apply_vel(self.physics.body_sets().0, *handle, delta);
+  }
+
+  fn add_player(&mut self, connection_id: Uuid) {
+    let object_id = self.level.add_object(
+      Object::new_mouse(IVec2::new(100, 100), 0),
+      &mut self.physics, true
+    );
+    self.player_list.insert(connection_id, object_id);
+    let object = self.level.get_obj(object_id).unwrap();
+    let update = ObjectUpdate::new()
+      .position(object.position)
+      .shape(object.points.clone())
+      .material(object.material)
+      .clone();
+    self.state_changes.insert(object_id, update);
+  }
 }

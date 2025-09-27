@@ -25,11 +25,11 @@ export default class Entity {
         this.priority = 2;
         break;
       case 3: // WinOn
-        this.color = "green";
+        this.color = "lime";
         this.priority = 1;
         break;
       case 4: // WinOff
-        this.color = "lime";
+        this.color = "green";
         this.priority = 1;
         break;
     }

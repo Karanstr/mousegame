@@ -1,5 +1,9 @@
 {
-  "spawnpoints": [],
+  "spawnpoints": [
+    [10, 10],
+    [30, 10],
+    [10, 30]
+  ],
 	"objects": [
 		{ 
 			"position": [150,225],
@@ -16,7 +20,9 @@
 		{ 
 			"position": [300,300],
 			"length": [250, 50],
-			"material": "WinOff",
+			"material": {
+        "Button": [0, false]
+      },
 			"animation" :null
 		}
 	]
