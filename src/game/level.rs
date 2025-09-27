@@ -12,7 +12,6 @@ use super::state::ObjectUpdate;
 pub enum Action {
   Pause,
   Hide,
-  Win,
 }
 #[derive(PartialEq, Eq, Hash)]
 struct RemoteControl {
@@ -26,6 +25,7 @@ pub struct Level {
   pub list: HashMap<usize, RigidBodyHandle>,
   pub players: HashSet<usize>,
   pub animated: HashSet<usize>,
+  next: Option<String>,
   
   events: Mutex<Vec<CollisionEvent>>,
   players_on_button: HashMap<usize, usize>, // id, channel
@@ -33,18 +33,21 @@ pub struct Level {
   receivers: HashSet<RemoteControl>,
 }
 impl Level {
-  pub fn tick(&mut self, physics: &mut Physics, state_changes: &mut HashMap<usize, ObjectUpdate>) {
+  pub fn tick(&mut self, physics: &mut Physics, state_changes: &mut HashMap<usize, ObjectUpdate>) -> Option<String> {
     for event in self.events.get_mut().clone() {
       self.handle_event(event, physics, state_changes);
     }
-    self.handle_remote(state_changes);
+    let win = self.handle_remote(state_changes);
+    if win { return self.next.clone();}
     self.events.get_mut().clear();
     self.register_movement(physics.body_sets().0, state_changes);
+    None
   }
   
   fn handle_remote(&mut self, state_changes: &mut HashMap<usize, ObjectUpdate>) -> bool {
     let mut channels_held = [0; 16];
     for channel in self.players_on_button.values() { channels_held[*channel as usize] += 1; }
+    if channels_held[0] >= self.button_requirements[0] { return true; }
     for receiver in self.receivers.iter() {
       let activate = channels_held[receiver.channel as usize] >= self.button_requirements[receiver.channel as usize];
       let obj = self.objects.get_mut(receiver.id).unwrap();
@@ -57,11 +60,6 @@ impl Level {
             obj.hidden = activate;
             state_changes.entry(receiver.id)
               .or_insert(ObjectUpdate::new()).hidden(activate);
-          }
-        }
-        Action::Win => {
-          if activate {
-            return true
           }
         }
       }
@@ -141,10 +139,11 @@ impl Level {
 
 impl Level {
   pub fn new(level: String, physics: &mut Physics) -> Self {
-    physics.reset_bodies();
+    physics.reset();
     let mut new = Self { 
       objects: Pond::new(),
       list: HashMap::new(),
+      next: None,
       players: HashSet::new(),
       animated: HashSet::new(),
       events: Mutex::new(Vec::new()),
@@ -157,6 +156,7 @@ impl Level {
     ).unwrap();
     let deser_level: InitialLevel = serde_json::from_str(&json).unwrap();
     new.button_requirements = deser_level.buttons;
+    new.next = deser_level.next;
     for min_obj in deser_level.objects {
       let recievers = min_obj.receivers.clone();
       new.add_object(min_obj.full_rect(), recievers, physics, false);

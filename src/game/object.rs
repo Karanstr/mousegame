@@ -47,7 +47,7 @@ pub struct Object {
 
 }
 impl Object {
-  pub fn new_mouse(position: IVec2) -> Self {
+  pub fn new_mouse() -> Self {
     let points = vec![
       IVec2::new(0, 0),
       IVec2::new(0, 16),
@@ -63,14 +63,14 @@ impl Object {
       .map(|i| [i, (i + 1) % vertices.len() as u32]).collect();
     let collider = ColliderBuilder::convex_decomposition(&vertices, &indices).build();
     let rigidbody = RigidBodyBuilder::new(RigidBodyType::Dynamic)
-      .translation(Vector2::new(position.x as f32, position.y as f32))
+      .translation(Vector2::zeros())
       .locked_axes(LockedAxes::ROTATION_LOCKED)
       .ccd_enabled(true)
       .linear_damping(50.0)
       .build();
     Self {
       points,
-      position: position.into(),
+      position: IVec2::ZERO,
       collider,
       rigidbody,
       material: Material::Player,

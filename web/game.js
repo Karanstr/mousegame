@@ -33,7 +33,8 @@ canvas.addEventListener("mousemove", (e) => {
 socket.onmessage = (msg) => {
   msg.data.arrayBuffer().then(bytes => {
     const data = new Int32Array(bytes);
-    let update_count = data[0];
+    let update_count = Math.abs(data[0]);
+    if (data[0] < 0) { level.clear(); }
     let cur_idx = 1;
     for (let update = 0; update < update_count; update += 1) {
       let size = data[cur_idx];

@@ -82,7 +82,8 @@ pub struct GameState {
   pub level: Level,
   physics: Physics,
   pub state_changes: HashMap<usize, ObjectUpdate>,
-  pub send_full: bool
+  pub send_full: bool,
+  pub send_new: bool,
 }
 impl GameState {
   
@@ -105,13 +106,21 @@ impl GameState {
       physics,
       state_changes,
       send_full: false,
+      send_new: false,
     }
   }
 
   pub fn tick(&mut self) { 
     self.level.step_animations(&mut self.physics);
     self.physics.step(&mut self.level);
-    self.level.tick(&mut self.physics, &mut self.state_changes);
+    if let Some(next_level) = self.level.tick(&mut self.physics, &mut self.state_changes) {
+      self.level = Level::new(next_level, &mut self.physics);
+      for (uuid, _) in &self.player_list.clone() {
+        let obj_id = self.level.add_object(Object::new_mouse(), Vec::new(), &mut self.physics, true);
+        self.player_list.insert(*uuid, obj_id);
+      }
+      self.send_new = true;
+    }
   }
 
   pub fn handle_events(&mut self, server: &mut Server) {
@@ -149,7 +158,7 @@ impl GameState {
 
   fn add_player(&mut self, connection_id: Uuid) {
     let object_id = self.level.add_object(
-      Object::new_mouse(IVec2::ZERO),
+      Object::new_mouse(),
       Vec::new(), &mut self.physics, true
     );
     self.player_list.insert(connection_id, object_id);

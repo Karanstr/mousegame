@@ -31,8 +31,8 @@ async fn main() {
 // Update consists of [i32_count, id, data]
 fn broadcast_state(state: &mut GameState, server: &mut Server) {
   let mut message_data = Vec::new();
-   if state.send_full {
-    message_data.push(state.level.list.len() as i32 + state.state_changes.len() as i32);
+  message_data.push(0);
+  if state.send_full || state.send_new {
     for id in state.level.list.keys() {
       let obj = state.level.get_obj(*id).unwrap();
       let mut update_data = ObjectUpdate::new()
@@ -43,16 +43,22 @@ fn broadcast_state(state: &mut GameState, server: &mut Server) {
       message_data.push(update_data.len() as i32 + 1);
       message_data.push(*id as i32);
       message_data.append(&mut update_data);
+      message_data[0] += 1;
     }
     state.send_full = false;
-  } else if state.state_changes.len() == 0 { return } else {
-    message_data.push(state.state_changes.len() as i32);
-  }
-  for (id, update) in state.state_changes.drain() {
-    let mut update_data = update.to_binary();
-    message_data.push(update_data.len() as i32 + 1);
-    message_data.push(id as i32);
-    message_data.append(&mut update_data);
+  } else if state.state_changes.len() == 0 { return } 
+  if state.send_new { 
+    message_data[0] *= -1;
+    state.send_new = false;
+    state.state_changes.clear();
+  } else {
+    for (id, update) in state.state_changes.drain() {
+      let mut update_data = update.to_binary();
+      message_data.push(update_data.len() as i32 + 1);
+      message_data.push(id as i32);
+      message_data.append(&mut update_data);
+      message_data[0] += 1;
+    }
   }
   let message = Message::Binary(bytemuck::cast_slice(&message_data).to_vec().into());
   for (_, connection) in &server.list {

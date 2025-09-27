@@ -42,9 +42,16 @@ impl Physics {
     (&mut self.rigids, &mut self.colliders)
   }
 
-  pub fn reset_bodies(&mut self) {
+  pub fn reset(&mut self) {
     self.rigids = RigidBodySet::new();
     self.colliders = ColliderSet::new();
+    self.pipeline = PhysicsPipeline::new();
+    self.islands = IslandManager::new();
+    self.broad_phase = BroadPhaseBvh::new();
+    self.narrow_phase = NarrowPhase::new();
+    self.impulse_joints = ImpulseJointSet::new();
+    self.multibody_joints = MultibodyJointSet::new();
+    self.ccd_solver = CCDSolver::default();
   }
 
   pub fn step(&mut self, level: &mut Level) {

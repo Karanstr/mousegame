@@ -4,13 +4,15 @@ const sensitivity = document.getElementById("sensitivity");
 
 export default class Level {
   constructor() { this.entities = new Map(); }
-
+  
+  clear() {
+    this.entities = new Map();
+  }
 
   handle_update(data) {
     let key = data[0];
     let flags = data[1];
     let idx = 2;
-    console.log(flags);
     if ((flags & 0b1) != 0) { this.entities.delete(key); return; }
     let entity = this.entities.get(key) ?? new Entity();
     if ((flags & 0b10) != 0) {

@@ -8,6 +8,7 @@ use super::level::Action;
 #[derive(Deserialize)]
 pub struct InitialLevel {
   pub buttons: [u8; 16],
+  pub next: Option<String>,
   pub objects: Vec<MinimalRect>,
 }
 
