@@ -113,9 +113,9 @@ impl Material {
       _ => unimplemented!(),
     }
   }
-  pub fn toggle(&mut self) {
+  pub fn set_active(&mut self, activity: bool) {
     if let Self::Button(_, active) = self {
-      *active = !*active;
+      *active = activity;
     }
   }
 }

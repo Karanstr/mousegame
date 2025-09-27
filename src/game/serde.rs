@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct InitialLevel {
-  pub spawnpoints: Vec<IVec2>,
+  pub spawnpoints: [IVec2; 3],
   pub objects: Vec<MinimalRect>
 }
 

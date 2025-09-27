@@ -24,6 +24,12 @@
         "Button": [0, false]
       },
 			"animation" :null
-		}
+		},
+    {
+			"position": [200,400],
+			"length": [100, 100],
+			"material": "Death",
+			"animation" :null
+    }
 	]
 }
