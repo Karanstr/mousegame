@@ -34,6 +34,10 @@ impl Physics {
     }
   }
 
+  pub fn remove(&mut self, handle: RigidBodyHandle) {
+    self.rigids.remove(handle, &mut self.islands, &mut self.colliders, &mut self.impulse_joints, &mut self.multibody_joints, true);
+  }
+
   pub fn body_sets(&mut self) -> (&mut RigidBodySet, &mut ColliderSet) {
     (&mut self.rigids, &mut self.colliders)
   }

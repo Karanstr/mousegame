@@ -10,13 +10,14 @@ export default class Level {
     let key = data[0];
     let flags = data[1];
     let idx = 2;
-    if (flags == 0) { this.entities.delete(key); return; }
+    console.log(flags);
+    if ((flags & 0b1) != 0) { this.entities.delete(key); return; }
     let entity = this.entities.get(key) ?? new Entity();
-    if ((flags & 0b1) != 0) {
+    if ((flags & 0b10) != 0) {
       entity.pos = new Vec2(data[idx], data[idx + 1]);
       idx += 2;
     }
-    if ((flags & 0b10) != 0) {
+    if ((flags & 0b100) != 0) {
       entity.points = [];
       let point_count = data[idx];
       idx += 1;
@@ -25,14 +26,14 @@ export default class Level {
         idx += 2;
       }
     }
-    if ((flags & 0b100) != 0) {
+    if ((flags & 0b1000) != 0) {
       entity.update_material(data[idx]);
       idx += 1;
     }
-    if ((flags & 0b1000) != 0) {
+    if ((flags & 0b10000) != 0) {
       entity.hidden = true;
     }
-    if ((flags & 0b10000) != 0) {
+    if ((flags & 0b100000) != 0) {
       entity.hidden = false;
     }
     this.entities.set(key, entity);

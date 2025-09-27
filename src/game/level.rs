@@ -77,24 +77,30 @@ impl Level {
     };
     let id_1 = id_from_collider(handle_1, &rigids, &colliders);
     let id_2 = id_from_collider(handle_2, &rigids, &colliders);
-    let (player_id, sensor_id) = if matches!(
-      self.objects.get(id_1).unwrap().material, Material::Player
-    ) { (id_1, id_2) } else { (id_2, id_1) };
+    let (player_id_maybe, sensor_id) =
+      if id_1.is_none() { (id_1, id_2.unwrap()) } else if id_2.is_none() { (id_2, id_1.unwrap()) } 
+      else if matches!(
+        self.objects.get(id_1.unwrap()).unwrap().material, Material::Player
+      ) { (id_1, id_2.unwrap()) } else { (id_2, id_1.unwrap()) };
     let sensor_type = self.objects.get(sensor_id).unwrap().material;
     match sensor_type {
       Material::Death => {
-        let Material::Player = self.objects.get(player_id).unwrap().material else { unreachable!() };
-        self.set_rapier_pos(player_id, rigids, IVec2::ZERO);
+        if let Some(player_id) = player_id_maybe {
+          let Material::Player = self.objects.get(player_id).unwrap().material else { unreachable!() };
+          self.set_rapier_pos(player_id, rigids, IVec2::ZERO);
+        }
       }
       Material::Button(channel, _) => {
         let button= self.objects.get_mut(sensor_id).unwrap();
         button.material.set_active(started);
         state_changes.entry(sensor_id)
           .or_insert(ObjectUpdate::new()).material(button.material);
-        if started {
-          self.players_on_button.insert(player_id, channel as usize);
-        } else {
-          self.players_on_button.remove(&player_id);
+        if let Some(player_id) = player_id_maybe {
+          if started {
+            self.players_on_button.insert(player_id, channel as usize);
+          } else {
+            self.players_on_button.remove(&player_id);
+          }
         }
       }
       _ => unimplemented!()
@@ -158,6 +164,16 @@ impl Level {
     new
   }
 
+  pub fn delete(&mut self, id: usize, physics: &mut Physics) {
+    self.objects.free(id);
+    let handle = self.list.remove(&id).unwrap();
+    self.players.remove(&id);
+    self.animated.remove(&id);
+    self.players_on_button.remove(&id);
+    self.receivers.retain(|controller| controller.id != id);
+    physics.remove(handle);
+  }
+
   pub fn add_object(&mut self, object: Object, receivers: Vec<(Action, u8)>, physics: &mut Physics, player: bool) -> usize {
     let id = self.objects.alloc(object);
     let object = self.objects.get_mut(id).unwrap();
@@ -207,9 +223,9 @@ impl Level {
 
 }
 
-fn id_from_collider(handle: ColliderHandle, rigids: &RigidBodySet, colliders: &ColliderSet) -> usize {
-  let rbh = colliders.get(handle).unwrap().parent().unwrap();
-  rigids.get(rbh).unwrap().user_data as usize
+fn id_from_collider(handle: ColliderHandle, rigids: &RigidBodySet, colliders: &ColliderSet) -> Option<usize> {
+  let rbh = colliders.get(handle)?.parent().unwrap();
+  Some(rigids.get(rbh).unwrap().user_data as usize)
 }
 
 impl EventHandler for Level {

@@ -2,29 +2,29 @@
   "buttons": [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
 	"objects": [
     {
-			"position": [-400, -400],
-			"length": [10, 800],
+			"position": [-650, -500],
+			"length": [10, 1000],
 			"material": "Wall",
 			"animation": null,
       "receivers": []
     },
 		{ 
-			"position": [400, -400],
-			"length": [-10, 800],
+			"position": [640, -500],
+			"length": [10, 1000],
 			"material": "Wall",
 			"animation": null,
       "receivers": []
 		},
     {
-			"position": [-400, -400],
-			"length": [800, 10],
+			"position": [-650, -500],
+			"length": [1300, 10],
 			"material": "Wall",
 			"animation": null,
       "receivers": []
     },
     {
-			"position": [-400, 400],
-			"length": [800, -10],
+			"position": [-650, 490],
+			"length": [1300, 10],
 			"material": "Wall",
 			"animation": null,
       "receivers": []
