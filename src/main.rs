@@ -10,8 +10,7 @@ const SERVER_UUID: Uuid = Uuid::nil();
 #[tokio::main]
 async fn main() {
   let mut server = Server::new(SocketAddr::from(([0, 0, 0, 0], 8080)));
-  let mut game_state = GameState::new();
-  
+  let mut game_state = GameState::new("level1".to_owned());
   let update_interval = Duration::from_millis(20); // 20 updates per second
   let mut last_update = Instant::now();
   loop {
@@ -25,7 +24,6 @@ async fn main() {
 
     broadcast_state(&mut game_state, &mut server);
   }
-
 }
 
 // Update consists of [i32_count, id, data]

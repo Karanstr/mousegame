@@ -26,6 +26,7 @@ pub struct Level {
   pub players: HashSet<usize>,
   pub animated: HashSet<usize>,
   next: Option<String>,
+  current: String,
   
   events: Mutex<Vec<CollisionEvent>>,
   players_on_button: HashMap<usize, usize>, // id, channel
@@ -35,19 +36,23 @@ pub struct Level {
 impl Level {
   pub fn tick(&mut self, physics: &mut Physics, state_changes: &mut HashMap<usize, ObjectUpdate>) -> Option<String> {
     for event in self.events.get_mut().clone() {
-      self.handle_event(event, physics, state_changes);
+      if self.handle_event(event, physics, state_changes) {
+        return Some(self.current.clone());
+      }
     }
-    let win = self.handle_remote(state_changes);
+    let win = self.handle_remote(physics, state_changes);
     if win { return self.next.clone();}
     self.events.get_mut().clear();
     self.register_movement(physics.body_sets().0, state_changes);
     None
   }
   
-  fn handle_remote(&mut self, state_changes: &mut HashMap<usize, ObjectUpdate>) -> bool {
+  fn handle_remote(&mut self, physics: &mut Physics, state_changes: &mut HashMap<usize, ObjectUpdate>) -> bool {
     let mut channels_held = [0; 16];
     for channel in self.players_on_button.values() { channels_held[*channel as usize] += 1; }
+    // Win channel
     if channels_held[0] >= self.button_requirements[0] { return true; }
+    
     for receiver in self.receivers.iter() {
       let activate = channels_held[receiver.channel as usize] >= self.button_requirements[receiver.channel as usize];
       let obj = self.objects.get_mut(receiver.id).unwrap();
@@ -56,8 +61,13 @@ impl Level {
           obj.frozen = activate;
         }
         Action::Hide => {
+          let (rigids, _) = physics.body_sets();
           if obj.hidden != activate {
             obj.hidden = activate;
+            let handle = self.list.get(&receiver.id).unwrap();
+            let body = rigids.get_mut(*handle).unwrap();
+            body.set_enabled(!activate);
+                  
             state_changes.entry(receiver.id)
               .or_insert(ObjectUpdate::new()).hidden(activate);
           }
@@ -67,7 +77,7 @@ impl Level {
     false
   }
 
-  fn handle_event(&mut self, event: CollisionEvent, physics: &mut Physics, state_changes: &mut HashMap<usize, ObjectUpdate>) {
+  fn handle_event(&mut self, event: CollisionEvent, physics: &mut Physics, state_changes: &mut HashMap<usize, ObjectUpdate>) -> bool {
     let (rigids, colliders) = physics.body_sets();
     let (started, handle_1, handle_2) = match event {
       CollisionEvent::Started(h1, h2, _) => (true, h1, h2),
@@ -82,6 +92,9 @@ impl Level {
       ) { (id_1, id_2.unwrap()) } else { (id_2, id_1.unwrap()) };
     let sensor_type = self.objects.get(sensor_id).unwrap().material;
     match sensor_type {
+      Material::BigDeath => {
+        return true
+      }
       Material::Death => {
         if let Some(player_id) = player_id_maybe {
           let Material::Player = self.objects.get(player_id).unwrap().material else { unreachable!() };
@@ -103,6 +116,7 @@ impl Level {
       }
       _ => unimplemented!()
     }
+    false
   }
 
   pub fn step_animations(&mut self, physics: &mut Physics) {
@@ -144,6 +158,7 @@ impl Level {
       objects: Pond::new(),
       list: HashMap::new(),
       next: None,
+      current: level.clone(),
       players: HashSet::new(),
       animated: HashSet::new(),
       events: Mutex::new(Vec::new()),

@@ -33,6 +33,14 @@ export default class Entity {
         this.color = "green";
         this.priority = 1;
         break;
+      case 5: 
+        this.color = "pink";
+        this.priority = 1;
+        break;
+      case 6:
+        this.color = "purple";
+        this.priority = 1;
+        break;
     }
   }
   
@@ -56,3 +64,4 @@ export default class Entity {
     }
   }
 }
+

@@ -118,20 +118,24 @@ impl Object {
 pub enum Material {
   Player,
   Wall,
+  PinkWall,
   Death,
-  None,
+  BigDeath,
   Button(u32, u8),
+  Tree,
 }
 impl Material {
   pub fn is_sensor(&self) -> bool {
     match self {
       Self::Button(_, _) => true,
+      Self::Tree => true,
       _ => false,
     }
   }
   pub fn has_event(&self) -> bool {
     match self {
       Self::Death => true,
+      Self::BigDeath => true,
       Self::Button(_, _) => true,
       _ => false,
     }
@@ -140,13 +144,21 @@ impl Material {
     match self {
       Self::Player => 0, // White + Black Outline
       Self::Wall => 1,      // Black
+      Self::PinkWall => 3,  // Pink 
       Self::Death => 2,     // Red
+      Self::BigDeath => 2,
                             
       Self::Button(x, active) 
         if *x == 0 && *active != 0 => 3, // Lime
 
       Self::Button(x, active)
         if *x == 0 && *active == 0 => 4, // Green
+      
+      Self::Button(x, active) 
+        if *x == 1 && *active != 0 => 5, // Pink
+
+      Self::Button(x, active)
+        if *x == 1 && *active == 0 => 6, // Purple
 
       _ => unimplemented!(),
     }

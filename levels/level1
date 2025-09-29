@@ -1,5 +1,5 @@
 {
-  "buttons": [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+  "buttons": [ 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
   "next": "level2",
 	"objects": [
     {
@@ -30,47 +30,15 @@
 			"animation": null,
       "receivers": []
     },
-		
-
-
-    { 
-			"position": [50, 50],
-			"length": [100, 30],
-			"material": "Wall",
-			"animation": null,
-      "receivers": [
-        ["Hide", 0]
-      ]
-		},
 		{ 
-			"position": [100, 0],
-			"length": [20, 20],
+			"position": [-100, -300],
+			"length": [200, 50],
 			"material": {
         "Button": [0, 0]
       },
 			"animation": null,
       "receivers": []
-		},
+		}
 
-    {
-			"position": [200,200],
-			"length": [100, 100],
-			"material": "Death",
-			"animation": [
-        {
-          "destination": [-100, -100],
-          "duration": 500,
-          "sleep": 50
-        },
-        {
-          "destination": [200, 200],
-          "duration": 500,
-          "sleep": 50
-        }
-      ],
-      "receivers": [
-        ["Pause", 0]
-      ]
-    }
 	]
 }

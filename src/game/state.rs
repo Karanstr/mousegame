@@ -87,39 +87,33 @@ pub struct GameState {
 }
 impl GameState {
   
-  pub fn new() -> Self {
+  pub fn new(initial_level: String) -> Self {
     let mut physics = Physics::new();
-    let level = Level::new("level1".to_owned(), &mut physics);
-    let mut state_changes = HashMap::new();
-    for id in level.list.keys() {
-      let object = level.get_obj(*id).unwrap();
-      let update = ObjectUpdate::new()
-        .position(object.position)
-        .shape(object.points.clone())
-        .material(object.material)
-        .clone();
-      state_changes.insert(*id, update);
-    }
+    let level = Level::new(initial_level, &mut physics);
     Self {
       player_list: HashMap::new(),
       level,
       physics,
-      state_changes,
+      state_changes: HashMap::new(),
       send_full: false,
-      send_new: false,
+      send_new: true,
     }
+  }
+
+  pub fn load(&mut self, level: String) {
+    self.level = Level::new(level, &mut self.physics);
+    for (uuid, _) in &self.player_list.clone() {
+      let obj_id = self.level.add_object(Object::new_mouse(), Vec::new(), &mut self.physics, true);
+      self.player_list.insert(*uuid, obj_id);
+    }
+    self.send_new = true;
   }
 
   pub fn tick(&mut self) { 
     self.level.step_animations(&mut self.physics);
     self.physics.step(&mut self.level);
     if let Some(next_level) = self.level.tick(&mut self.physics, &mut self.state_changes) {
-      self.level = Level::new(next_level, &mut self.physics);
-      for (uuid, _) in &self.player_list.clone() {
-        let obj_id = self.level.add_object(Object::new_mouse(), Vec::new(), &mut self.physics, true);
-        self.player_list.insert(*uuid, obj_id);
-      }
-      self.send_new = true;
+      self.load(next_level);
     }
   }
 

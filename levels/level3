@@ -1,6 +1,6 @@
 {
-  "buttons": [ 3, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
-  "next": "level3",
+  "buttons": [ 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+  "next": "level4",
 	"objects": [
     {
 			"position": [-650, -500],
@@ -71,29 +71,30 @@
     },
 
     {
-      "position": [50, -50],
-      "length": [100, 10],
-      "material": "PinkWall",
-			"animation": null,
-      "receivers": [
-        ["Hide", 1]
-      ]
-    },
-    {
-      "position": [40, -20],
-      "length": [30, 30],
-			"material": {
-        "Button": [1, 0]
-      },
+      "position": [-100, -100],
+      "length": [250, 10],
+      "material": "BigDeath",
       "animation": null,
       "receivers": []
     },
     {
-      "position": [-50, 100],
-      "length": [30, 30],
-			"material": {
-        "Button": [1, 0]
-      },
+      "position": [-100, -100],
+      "length": [10, 180],
+      "material": "BigDeath",
+      "animation": null,
+      "receivers": []
+    },
+    {
+      "position": [-100, 70],
+      "length": [200, 10],
+      "material": "BigDeath",
+      "animation": null,
+      "receivers": []
+    },
+    {
+      "position": [-100, 105],
+      "length": [250, 10],
+      "material": "BigDeath",
       "animation": null,
       "receivers": []
     }
